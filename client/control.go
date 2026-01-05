@@ -433,6 +433,10 @@ func NewConn(tp string, vkey string, server string, proxyUrl string) (*conn.Conn
 	defer connection.SetDeadline(time.Time{})
 
 	c := conn.NewConn(connection)
+	if c == nil {
+		_ = connection.Close()
+		return nil, "", fmt.Errorf("conn.NewConn returned nil (tp=%q server=%q)", tp, server)
+	}
 	if _, err := c.BufferWrite([]byte(common.CONN_TEST)); err != nil {
 		_ = c.Close()
 		return nil, "", err
@@ -588,6 +592,9 @@ func NewConn(tp string, vkey string, server string, proxyUrl string) (*conn.Conn
 }
 
 func SendType(c *conn.Conn, connType, uuid string) error {
+	if c == nil {
+		return fmt.Errorf("SendType: nil conn (connType=%s uuid=%s)", connType, uuid)
+	}
 	if _, err := c.BufferWrite([]byte(connType)); err != nil {
 		_ = c.Close()
 		return err

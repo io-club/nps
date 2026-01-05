@@ -391,7 +391,7 @@ reset:
 		return errors.New("vkey duplicate, please reset")
 	}
 	if c.RateLimit == 0 {
-		c.Rate = rate.NewRate(int64(2 << 23))
+		c.Rate = rate.NewRate(0)
 	} else if c.Rate == nil {
 		c.Rate = rate.NewRate(int64(c.RateLimit * 1024))
 	}
@@ -449,7 +449,7 @@ func (s *DbUtils) UpdateClient(t *Client) error {
 		t.Rate = rate.NewRate(int64(t.RateLimit * 1024))
 		t.Rate.Start()
 	} else {
-		t.Rate = rate.NewRate(int64(2 << 23))
+		t.Rate = rate.NewRate(0)
 		t.Rate.Start()
 	}
 	return nil

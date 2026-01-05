@@ -176,7 +176,7 @@ func (s *ClientController) Edit() {
 				c.Rate = rate.NewRate(int64(c.RateLimit * 1024))
 				c.Rate.Start()
 			} else {
-				c.Rate = rate.NewRate(int64(2 << 23))
+				c.Rate = rate.NewRate(0)
 				c.Rate.Start()
 			}
 
@@ -245,7 +245,7 @@ func clearClientStatus(c *file.Client, name string) {
 		c.Rate = rate.NewRate(int64(c.RateLimit * 1024))
 		c.Rate.Start()
 	} else {
-		c.Rate = rate.NewRate(int64(2 << 23))
+		c.Rate = rate.NewRate(0)
 		c.Rate.Start()
 	}
 	return
