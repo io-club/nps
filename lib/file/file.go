@@ -83,7 +83,7 @@ func (s *JsonDb) LoadClientFromJsonFile() {
 			Blake2bVkeyIndex.Add(crypt.Blake2b(post.VerifyKey), post.Id)
 		}
 		if post.RateLimit > 0 {
-			post.Rate = rate.NewRate(int64(post.RateLimit * 1024))
+			post.Rate = rate.NewRate(int64(post.RateLimit) * 1024)
 		} else {
 			post.Rate = rate.NewRate(0)
 		}

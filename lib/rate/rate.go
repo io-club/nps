@@ -85,18 +85,20 @@ func putTimer(t *time.Timer) {
 }
 
 func NewRate(limitBps int64) *Rate {
+	if limitBps <= 0 {
+		limitBps = 0
+	}
 	r := &Rate{
-		rate:    limitBps,
 		enabled: 1,
 		t0:      time.Now(),
 		burstNs: burstWindowNs,
 	}
+	atomic.StoreInt64(&r.rate, limitBps)
 	r.stop.Store(&stopSignal{ch: make(chan struct{})})
 
 	if limitBps > 0 {
 		atomic.StoreInt64(&r.tat, -r.burstNs) // full burst initially
 	} else {
-		r.rate = 0
 		atomic.StoreInt64(&r.tat, 0)
 	}
 
@@ -106,11 +108,31 @@ func NewRate(limitBps int64) *Rate {
 	return r
 }
 
+func (r *Rate) SetLimit(limitBps int64) {
+	if r == nil {
+		return
+	}
+	if limitBps <= 0 {
+		limitBps = 0
+	}
+	atomic.StoreInt64(&r.rate, limitBps)
+}
+
+// ResetLimit is a helper: Stop -> SetLimit -> Start.
+func (r *Rate) ResetLimit(limitBps int64) {
+	if r == nil {
+		return
+	}
+	r.Stop()
+	r.SetLimit(limitBps)
+	r.Start()
+}
+
 func (r *Rate) Limit() int64 {
 	if r == nil {
 		return 0
 	}
-	return r.rate
+	return atomic.LoadInt64(&r.rate)
 }
 
 func (r *Rate) Now() int64 {
@@ -137,9 +159,12 @@ func (r *Rate) Start() {
 	}
 
 	if needReset {
-		if r.rate > 0 {
+		rate := atomic.LoadInt64(&r.rate)
+		if rate > 0 {
 			now := r.nowNs()
 			atomic.StoreInt64(&r.tat, now-r.burstNs) // full burst on (re)enable
+		} else {
+			atomic.StoreInt64(&r.tat, 0)
 		}
 		atomic.StoreInt64(&r.bytesAcc, 0)
 		now := r.nowNs()
@@ -175,11 +200,12 @@ func (r *Rate) ReturnBucket(size int64) {
 
 	atomic.AddInt64(&r.bytesAcc, -size)
 
-	if r.rate <= 0 {
+	rate := atomic.LoadInt64(&r.rate)
+	if rate <= 0 {
 		return
 	}
 
-	refund := bytesToNsCeil(size, r.rate)
+	refund := bytesToNsCeil(size, rate)
 	now := r.nowNs()
 	minTat := now - r.burstNs
 
@@ -208,7 +234,8 @@ func (r *Rate) Get(size int64) {
 	now := r.nowNs()
 	r.updateRateWithNow(now)
 
-	if r.rate <= 0 {
+	rate := atomic.LoadInt64(&r.rate)
+	if rate <= 0 {
 		return
 	}
 
@@ -217,7 +244,7 @@ func (r *Rate) Get(size int64) {
 		stopCh = s.ch
 	}
 
-	cost := bytesToNsCeil(size, r.rate)
+	cost := bytesToNsCeil(size, rate)
 
 	for {
 		minTat := now - r.burstNs
