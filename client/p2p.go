@@ -90,7 +90,7 @@ func handleP2PUdp(pCtx context.Context, localAddr, rAddr, md5Password, sendRole,
 			break
 		}
 	}
-	if remoteAddress, localAddress, role, err = sendP2PTestMsg(parentCtx, localConn, sendRole, remoteAddr1, remoteAddr2, remoteAddr3, remoteLocal); err != nil {
+	if remoteAddress, localAddress, role, err = sendP2PTestMsg(parentCtx, localConn, sendRole, remoteAddr1, remoteAddr2, remoteAddr3, remoteLocal, localAddr1, localAddr2, localAddr3); err != nil {
 		return
 	}
 	if localAddr != localAddress {
@@ -123,7 +123,7 @@ func getRemoteAddressFromServer(rAddr, localAddr string, localConn net.PacketCon
 	return nil
 }
 
-func sendP2PTestMsg(pCtx context.Context, localConn net.PacketConn, sendRole, remoteAddr1, remoteAddr2, remoteAddr3, remoteLocal string) (remoteAddr, localAddr, role string, err error) {
+func sendP2PTestMsg(pCtx context.Context, localConn net.PacketConn, sendRole, remoteAddr1, remoteAddr2, remoteAddr3, remoteLocal, localAddr1, localAddr2, localAddr3 string) (remoteAddr, localAddr, role string, err error) {
 	defer localConn.Close()
 	isClose := false
 	defer func() { isClose = true }()
@@ -149,54 +149,90 @@ func sendP2PTestMsg(pCtx context.Context, localConn net.PacketConn, sendRole, re
 			}
 		}()
 	}
+	var interval, localInterval int
+	var localConnList []net.PacketConn
+	defer func() {
+		for _, c := range localConnList {
+			c.Close()
+		}
+	}()
+	localConnList = append(localConnList, localConn)
 	if remoteAddr1 != "" && remoteAddr2 != "" && remoteAddr3 != "" {
-		interval, err := getAddrInterval(remoteAddr1, remoteAddr2, remoteAddr3)
+		interval, err = getAddrInterval(remoteAddr1, remoteAddr2, remoteAddr3)
 		if err != nil {
 			return "", localConn.LocalAddr().String(), sendRole, err
 		}
-		go func() {
-			addr, err := getNextAddr(remoteAddr3, interval)
-			if err != nil {
-				return
-			}
-			remoteUdpAddr, err := net.ResolveUDPAddr("udp", addr)
-			if err != nil {
-				return
-			}
-			logs.Trace("try send test packet to target %s", addr)
-			ticker := time.NewTicker(time.Millisecond * 500)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-parentCtx.Done():
-					return
-				case <-ticker.C:
-					if isClose {
-						return
+		localInterval, err = getAddrInterval(localAddr1, localAddr2, localAddr3)
+		if err != nil {
+			return "", localConn.LocalAddr().String(), sendRole, err
+		}
+
+		switch {
+		case interval == 0 && localInterval != 0:
+			localAddress := localConn.LocalAddr().String()
+			for i := 0; i < 256; i++ {
+				var tmpAddr string
+				if strings.Contains(localAddress, "]:") {
+					tmpConn, err := common.GetLocalUdp6Addr()
+					if err != nil {
+						logs.Error("%v", err)
+						return "", "", "", err
 					}
-					if _, err := localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), remoteUdpAddr); err != nil {
-						return
+					tmpAddr = tmpConn.LocalAddr().String()
+				} else {
+					tmpConn, err := common.GetLocalUdp4Addr()
+					if err != nil {
+						logs.Error("%v", err)
+						return "", "", "", err
 					}
+					tmpAddr = tmpConn.LocalAddr().String()
 				}
+				tmpConn, err := conn.NewUdpConnByAddr(tmpAddr)
+				if err != nil {
+					logs.Error("%v", err)
+					return "", "", "", err
+				}
+				localConnList = append(localConnList, tmpConn)
+				go func(c net.PacketConn) {
+					addr, err := getNextAddr(remoteAddr3, interval)
+					if err != nil {
+						return
+					}
+					remoteUdpAddr, err := net.ResolveUDPAddr("udp", addr)
+					if err != nil {
+						return
+					}
+					logs.Trace("try send test packet to target %s", addr)
+					ticker := time.NewTicker(time.Millisecond * 500)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-parentCtx.Done():
+							return
+						case <-ticker.C:
+							if isClose {
+								return
+							}
+							if _, err := c.WriteTo([]byte(common.WORK_P2P_CONNECT), remoteUdpAddr); err != nil {
+								return
+							}
+						}
+					}
+				}(tmpConn)
+				time.Sleep(time.Millisecond * 10)
 			}
-		}()
-		if interval != 0 {
-			ip := common.RemovePortFromHost(remoteAddr2)
-			p1 := common.GetPortByAddr(remoteAddr1)
-			p2 := common.GetPortByAddr(remoteAddr2)
-			p3 := common.GetPortByAddr(remoteAddr3)
+		case interval != 0 && localInterval == 0:
 			go func() {
-				startPort := p3
-				endPort := startPort + (interval * 50)
-				if (p1 < p3 && p3 < p2) || (p1 > p3 && p3 > p2) {
-					endPort = endPort + (p2 - p3)
-				}
-				endPort = common.GetPort(endPort)
-				logs.Debug("Start Port: %d, End Port: %d, Interval: %d", startPort, endPort, interval)
-				ports := getRandomPortArr(startPort, endPort)
+				ip := common.RemovePortFromHost(remoteAddr2)
+				ports := getRandomPortArr(1, 65535)
 				ctx, cancel := context.WithCancel(parentCtx)
 				defer cancel()
-				for i := 0; i <= 50; i++ {
+				for i := 0; i <= 1000; i++ {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+					}
 					go func(port int) {
 						trueAddress := ip + ":" + strconv.Itoa(port)
 						logs.Trace("try send test packet to target %s", trueAddress)
@@ -220,12 +256,109 @@ func sendP2PTestMsg(pCtx context.Context, localConn net.PacketConn, sendRole, re
 							}
 						}
 					}(ports[i])
-					time.Sleep(time.Millisecond * 10)
+					time.Sleep(time.Millisecond * 15)
 				}
 			}()
+		default:
+			go func() {
+				addr, err := getNextAddr(remoteAddr3, interval)
+				if err != nil {
+					return
+				}
+				remoteUdpAddr, err := net.ResolveUDPAddr("udp", addr)
+				if err != nil {
+					return
+				}
+				logs.Trace("try send test packet to target %s", addr)
+				ticker := time.NewTicker(time.Millisecond * 500)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-parentCtx.Done():
+						return
+					case <-ticker.C:
+						if isClose {
+							return
+						}
+						if _, err := localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), remoteUdpAddr); err != nil {
+							return
+						}
+					}
+				}
+			}()
+			if interval != 0 {
+				ip := common.RemovePortFromHost(remoteAddr2)
+				p1 := common.GetPortByAddr(remoteAddr1)
+				p2 := common.GetPortByAddr(remoteAddr2)
+				p3 := common.GetPortByAddr(remoteAddr3)
+				go func() {
+					startPort := p3
+					endPort := startPort + (interval * 50)
+					if (p1 < p3 && p3 < p2) || (p1 > p3 && p3 > p2) {
+						endPort = endPort + (p2 - p3)
+					}
+					endPort = common.GetPort(endPort)
+					logs.Debug("Start Port: %d, End Port: %d, Interval: %d", startPort, endPort, interval)
+					ports := getRandomPortArr(startPort, endPort)
+					ctx, cancel := context.WithCancel(parentCtx)
+					defer cancel()
+					for i := 0; i <= 50; i++ {
+						go func(port int) {
+							trueAddress := ip + ":" + strconv.Itoa(port)
+							logs.Trace("try send test packet to target %s", trueAddress)
+							remoteUdpAddr, err := net.ResolveUDPAddr("udp", trueAddress)
+							if err != nil {
+								return
+							}
+							ticker := time.NewTicker(time.Second * 2)
+							defer ticker.Stop()
+							for {
+								select {
+								case <-ctx.Done():
+									return
+								case <-ticker.C:
+									if isClose {
+										return
+									}
+									if _, err := localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), remoteUdpAddr); err != nil {
+										return
+									}
+								}
+							}
+						}(ports[i])
+						time.Sleep(time.Millisecond * 10)
+					}
+				}()
+			}
 		}
 	}
 
+	if remoteAddr1 != "" && remoteAddr2 != "" && remoteAddr3 != "" && interval == 0 && localInterval != 0 {
+		type P2PResult struct {
+			RemoteAddr string
+			LocalAddr  string
+			Role       string
+			Err        error
+		}
+		resultChan := make(chan P2PResult, 1)
+		for _, c := range localConnList {
+			go func(c net.PacketConn) {
+				rAddr, lAddr, rRole, err := waitP2PHandshake(parentCtx, c, sendRole, 10)
+				resultChan <- P2PResult{RemoteAddr: rAddr, LocalAddr: lAddr, Role: rRole, Err: err}
+			}(c)
+		}
+		select {
+		case res := <-resultChan:
+			return res.RemoteAddr, res.LocalAddr, res.Role, res.Err
+		case <-parentCtx.Done():
+			return "", localConn.LocalAddr().String(), sendRole, errors.New("connect to the target failed, maybe the nat type is not support p2p")
+		}
+	} else {
+		return waitP2PHandshake(parentCtx, localConn, sendRole, 10)
+	}
+}
+
+func waitP2PHandshake(parentCtx context.Context, localConn net.PacketConn, sendRole string, readTimeout int) (remoteAddr, localAddr, role string, err error) {
 	buf := make([]byte, 10)
 Loop:
 	for {
@@ -234,7 +367,7 @@ Loop:
 			break Loop
 		default:
 		}
-		_ = localConn.SetReadDeadline(time.Now().Add(time.Second * 10))
+		_ = localConn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(readTimeout)))
 		n, addr, err := localConn.ReadFrom(buf)
 		_ = localConn.SetReadDeadline(time.Time{})
 		if err != nil {
