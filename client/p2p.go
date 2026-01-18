@@ -33,8 +33,9 @@ func handleP2PUdp(pCtx context.Context, localAddr, rAddr, md5Password, sendRole,
 		}
 	}
 	var remoteAddr1, remoteAddr2, remoteAddr3, remoteLocal string
+	var localAddr1, localAddr2, localAddr3 string
 	//logs.Debug("get remote address from server")
-Loop:
+
 	for {
 		select {
 		case <-parentCtx.Done():
@@ -51,14 +52,15 @@ Loop:
 		}
 		parts := strings.Split(string(buf[:n]), common.CONN_DATA_SEQ)
 		payload := common.ValidateAddr(parts[0])
-		if len(parts) >= 2 {
-			remoteLocal = common.ValidateAddr(parts[1])
-		}
+		lpayload := common.ValidateAddr(parts[1])
 		if len(parts) >= 3 {
-			mode = parts[2]
+			remoteLocal = common.ValidateAddr(parts[2])
 		}
 		if len(parts) >= 4 {
-			data = parts[3]
+			mode = parts[3]
+		}
+		if len(parts) >= 5 {
+			data = parts[4]
 		}
 		rPort := common.GetPortByAddr(rAddr)
 		//rAddr2, _ := getNextAddr(rAddr, 1)
@@ -67,20 +69,24 @@ Loop:
 		switch common.GetPortByAddr(addr.String()) {
 		case rPort:
 			remoteAddr1 = payload
+			localAddr1 = lpayload
 		case rPort + 1:
 			remoteAddr2 = payload
+			localAddr2 = lpayload
 		case rPort + 2:
 			remoteAddr3 = payload
+			localAddr3 = lpayload
 		}
 		//logs.Debug("buf: %s", buf)
 		if string(buf[:n]) == common.WORK_P2P_CONNECT {
-			break Loop
+			break
 		}
 		//logs.Debug("addr: %s", addr.String())
 		//logs.Debug("rAddr1: %s rAddr2: %s rAddr3: %s", rAddr, rAddr2, rAddr3)
 		//logs.Debug("remoteAddr1: %s remoteAddr2: %s remoteAddr3: %s remoteLocal: %s", remoteAddr1, remoteAddr2, remoteAddr3, remoteLocal)
-		if remoteAddr1 != "" && remoteAddr2 != "" && remoteAddr3 != "" {
-			//logs.Debug("remoteAddr1: %s remoteAddr2: %s remoteAddr3: %s remoteLocal: %s", remoteAddr1, remoteAddr2, remoteAddr3, remoteLocal)
+		if remoteAddr1 != "" && remoteAddr2 != "" && remoteAddr3 != "" && (localAddr1 != "" && localAddr2 != "" && localAddr3 != "") {
+			logs.Debug("remoteAddr1: %s remoteAddr2: %s remoteAddr3: %s remoteLocal: %s", remoteAddr1, remoteAddr2, remoteAddr3, remoteLocal)
+			logs.Debug("localAddr1: %s localAddr2: %s localAddr3: %s", localAddr1, localAddr2, localAddr3)
 			break
 		}
 	}
