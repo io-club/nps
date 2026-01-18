@@ -130,25 +130,6 @@ func sendP2PTestMsg(pCtx context.Context, localConn net.PacketConn, sendRole, re
 	parentCtx, parentCancel := context.WithCancel(pCtx)
 	defer parentCancel()
 	//logs.Trace("%s %s %s %s", remoteAddr3, remoteAddr2, remoteAddr1, remoteLocal)
-	if remoteLocal != "" {
-		go func() {
-			remoteUdpLocal, err := net.ResolveUDPAddr("udp", remoteLocal)
-			if err != nil {
-				return
-			}
-			for i := 20; i > 0; i-- {
-				select {
-				case <-parentCtx.Done():
-					return
-				default:
-				}
-				if _, err := localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), remoteUdpLocal); err != nil {
-					return
-				}
-				time.Sleep(time.Millisecond * 100)
-			}
-		}()
-	}
 	var interval, localInterval int
 	var localConnList []net.PacketConn
 	defer func() {
@@ -331,6 +312,25 @@ func sendP2PTestMsg(pCtx context.Context, localConn net.PacketConn, sendRole, re
 				}()
 			}
 		}
+	}
+	if remoteLocal != "" {
+		go func() {
+			remoteUdpLocal, err := net.ResolveUDPAddr("udp", remoteLocal)
+			if err != nil {
+				return
+			}
+			for i := 20; i > 0; i-- {
+				select {
+				case <-parentCtx.Done():
+					return
+				default:
+				}
+				if _, err := localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), remoteUdpLocal); err != nil {
+					return
+				}
+				time.Sleep(time.Millisecond * 100)
+			}
+		}()
 	}
 
 	if remoteAddr1 != "" && remoteAddr2 != "" && remoteAddr3 != "" && interval == 0 && localInterval != 0 {
