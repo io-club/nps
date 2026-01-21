@@ -1,7 +1,7 @@
 .idea
 nps
 npc
-npc.exe
+*.exe
 .vscode/
 *.tar.gz
 *.json

@@ -139,6 +139,14 @@ npc update && npc restart
 
 ### Stable
 
+- **v0.34.0 (2026-01-22)**
+  - 调整限速逻辑
+  - 增强P2P打洞能力（不再兼容旧版） [#198](https://github.com/djylb/nps/pull/198) (感谢[cr4n5](https://github.com/cr4n5))
+  - 修复pprof配置不生效 [#199](https://github.com/djylb/nps/issues/199)
+  - 优化程序稳定性 [#201](https://github.com/djylb/nps/pull/201)
+  - 优化高压转发场景
+  - 更新相关依赖包
+
 - **v0.33.13 (2026-01-05)**
   - 优化程序稳定性
   - 优化吞吐性能
