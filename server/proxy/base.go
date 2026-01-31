@@ -109,6 +109,14 @@ func (s *BaseServer) DealClient(c *conn.Conn, client *file.Client, addr string,
 		_ = c.Close()
 		return nil
 	}
+	if task != nil && task.Mode == "mixProxy" && task.DestAclMode != file.AclOff {
+		if !task.AllowsDestination(addr) {
+			logs.Warn("mixProxy dest acl deny: client=%d task=%d dest=%s",
+				client.Id, task.Id, common.ExtractHost(addr))
+			_ = c.Close()
+			return errors.New("destination denied by dest acl")
+		}
+	}
 	isLocal := s.AllowLocalProxy && localProxy || client.Id < 0
 	link := conn.NewLink(tp, addr, client.Cnf.Crypt, client.Cnf.Compress, c.Conn.RemoteAddr().String(), isLocal)
 	target, err := s.Bridge.SendLinkInfo(client.Id, link, s.Task)
