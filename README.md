@@ -141,6 +141,8 @@ npc update && npc restart
   - 混合代理添加白名单功能 [#205](https://github.com/djylb/nps/pull/205) (感谢[Yourdaylight](https://github.com/Yourdaylight))
   - 混合代理同时支持黑白名单功能
   - P2P优先使用IPv6直连
+  - 优化P2P处理性能
+  - 恢复P2P旧版客户端兼容性
   - 更新相关依赖包
 
 ### Stable
