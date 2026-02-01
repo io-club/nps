@@ -1270,3 +1270,182 @@ func IsTrustedProxy(list, ipStr string) bool {
 
 	return false
 }
+
+// SplitCommaAddrList splits "ip:port,ip:port,..." into a de-duplicated list of valid IP:port.
+// - Accepts single item without comma.
+// - Ignores invalid entries.
+// - Keeps first valid one as stable fallback.
+func SplitCommaAddrList(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		v := ValidateAddr(p)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
+// ParseIPFromAddr parses IP from an "ip:port" (supports "[v6]:port").
+// Returns nil if cannot parse.
+func ParseIPFromAddr(addr string) net.IP {
+	if addr == "" {
+		return nil
+	}
+	ipStr := GetIpByAddr(addr)
+	if ipStr == "" {
+		return nil
+	}
+	if strings.HasPrefix(ipStr, "[") && strings.HasSuffix(ipStr, "]") {
+		ipStr = ipStr[1 : len(ipStr)-1]
+	}
+	if i := strings.LastIndex(ipStr, "%"); i != -1 { // fe80::1%eth0
+		ipStr = ipStr[:i]
+	}
+	return net.ParseIP(ipStr)
+}
+
+// IsPublicIPStrict checks if IP is globally routable on the Internet.
+// It excludes RFC1918, loopback, link-local, multicast, unspecified,
+// and also excludes CGNAT / TEST-NET / benchmarking / documentation ranges.
+func IsPublicIPStrict(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	ip = NormalizeIP(ip)
+	if ip == nil {
+		return false
+	}
+	if !ip.IsGlobalUnicast() {
+		return false
+	}
+	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
+		return false
+	}
+
+	if ip4 := ip.To4(); ip4 != nil {
+		// CGNAT 100.64.0.0/10
+		if ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127 {
+			return false
+		}
+		// TEST-NET-1/2/3: 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24
+		if ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 2 {
+			return false
+		}
+		if ip4[0] == 198 && ip4[1] == 51 && ip4[2] == 100 {
+			return false
+		}
+		if ip4[0] == 203 && ip4[1] == 0 && ip4[2] == 113 {
+			return false
+		}
+		// 198.18.0.0/15 benchmark
+		if ip4[0] == 198 && (ip4[1] == 18 || ip4[1] == 19) {
+			return false
+		}
+		// 192.88.99.0/24 (6to4 relay anycast, deprecated)
+		if ip4[0] == 192 && ip4[1] == 88 && ip4[2] == 99 {
+			return false
+		}
+		return true
+	}
+
+	// IPv6 documentation: 2001:db8::/32
+	if len(ip) >= 4 && ip[0] == 0x20 && ip[1] == 0x01 && ip[2] == 0x0d && ip[3] == 0xb8 {
+		return false
+	}
+	return true
+}
+
+// PickBestV4V6FromLocalList picks best IPv4/IPv6 address from localStr (comma-separated).
+// Rules within each family:
+// - First seen becomes candidate.
+// - If later a "public" address appears and current is not public, replace it.
+// Returns:
+// - bestV4: best IPv4 "ip:port" if any
+// - bestV6: best IPv6 "[ip]:port" if any
+// - fallback: first valid address from list (stable)
+func PickBestV4V6FromLocalList(localStr string) (bestV4 string, bestV6 string, fallback string) {
+	addrs := SplitCommaAddrList(localStr)
+	if len(addrs) == 0 {
+		return "", "", ""
+	}
+	fallback = addrs[0]
+
+	var bestV4Public bool
+	var bestV6Public bool
+
+	for _, a := range addrs {
+		ip := ParseIPFromAddr(a)
+		if ip == nil {
+			continue
+		}
+		if ip.To4() != nil {
+			pub := IsPublicIPStrict(ip)
+			if bestV4 == "" {
+				bestV4 = a
+				bestV4Public = pub
+			} else if !bestV4Public && pub {
+				bestV4 = a
+				bestV4Public = true
+			}
+			continue
+		}
+		pub := IsPublicIPStrict(ip)
+		if bestV6 == "" {
+			bestV6 = a
+			bestV6Public = pub
+		} else if !bestV6Public && pub {
+			bestV6 = a
+			bestV6Public = true
+		}
+	}
+	return
+}
+
+// HasIPv6InLocalList reports whether localStr contains at least one valid IPv6 "[...]:port".
+func HasIPv6InLocalList(localStr string) bool {
+	_, v6, _ := PickBestV4V6FromLocalList(localStr)
+	return v6 != ""
+}
+
+// ChooseLocalAddrForPeer chooses ONE address from selfLocal to return to peer.
+// Rule (per your requirement):
+// - If both sides contain IPv6 -> return self IPv6 (best, public preferred)
+// - Else -> return self IPv4 (best, public preferred)
+// - Else -> return self IPv6 if any
+// - Else -> return fallback (first valid) or ""
+//
+// Works when:
+// - selfLocal is empty (returns "")
+// - selfLocal has 1 address (no comma)
+// - selfLocal has many addresses (comma list)
+// - peerLocal is empty (IPv6 mutual check fails, will choose IPv4 first)
+func ChooseLocalAddrForPeer(selfLocal, peerLocal string) string {
+	selfV4, selfV6, selfFallback := PickBestV4V6FromLocalList(selfLocal)
+	peerHasV6 := HasIPv6InLocalList(peerLocal)
+
+	if selfV6 != "" && peerHasV6 {
+		return selfV6
+	}
+	if selfV4 != "" {
+		return selfV4
+	}
+	if selfV6 != "" {
+		return selfV6
+	}
+	return selfFallback
+}

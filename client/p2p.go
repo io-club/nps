@@ -26,8 +26,15 @@ func handleP2PUdp(pCtx context.Context, localAddr, rAddr, md5Password, sendRole,
 		return
 	}
 	defer localConn.Close()
+
+	port := common.GetPortStrByAddr(localAddr)
+	if port == "" {
+		port = common.GetPortStrByAddr(localConn.LocalAddr().String())
+	}
+	localStr := buildP2PLocalStr(port)
+
 	for seq := 0; seq < 3; seq++ {
-		if err = getRemoteAddressFromServer(rAddr, localAddr, localConn, md5Password, sendRole, sendMode, sendData, seq); err != nil {
+		if err = getRemoteAddressFromServer(rAddr, localStr, localConn, md5Password, sendRole, sendMode, sendData, seq); err != nil {
 			logs.Error("%v", err)
 			return
 		}
@@ -105,6 +112,38 @@ func handleP2PUdp(pCtx context.Context, localAddr, rAddr, md5Password, sendRole,
 	//	c, err = net.ListenPacket("udp4", ":"+port)
 	//}
 	return
+}
+
+func buildP2PLocalStr(port string) string {
+	if port == "" {
+		return ""
+	}
+	out := make([]string, 0, 2)
+
+	tmpConnV4, errV4 := common.GetLocalUdp4Addr()
+	if errV4 == nil && tmpConnV4 != nil {
+		if la, ok := tmpConnV4.LocalAddr().(*net.UDPAddr); ok && la != nil && la.IP != nil && !common.IsZeroIP(la.IP) {
+			a := net.JoinHostPort(la.IP.String(), port)
+			if a != "" && !common.InStrArr(out, a) {
+				out = append(out, a)
+			}
+		}
+	}
+
+	tmpConnV6, errV6 := common.GetLocalUdp6Addr()
+	if errV6 == nil && tmpConnV6 != nil {
+		if la, ok := tmpConnV6.LocalAddr().(*net.UDPAddr); ok && la != nil && la.IP != nil && !common.IsZeroIP(la.IP) {
+			a := net.JoinHostPort(la.IP.String(), port)
+			if a != "" && !common.InStrArr(out, a) {
+				out = append(out, a)
+			}
+		}
+	}
+
+	if len(out) == 0 {
+		return ""
+	}
+	return strings.Join(out, ",")
 }
 
 func getRemoteAddressFromServer(rAddr, localAddr string, localConn net.PacketConn, md5Password, role, mode, data string, add int) error {

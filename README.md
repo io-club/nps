@@ -140,6 +140,7 @@ npc update && npc restart
   - 避免连接过程超时断连
   - 混合代理添加白名单功能 [#205](https://github.com/djylb/nps/pull/205) (感谢[Yourdaylight](https://github.com/Yourdaylight))
   - 混合代理同时支持黑白名单功能
+  - P2P优先使用IPv6直连
   - 更新相关依赖包
 
 ### Stable

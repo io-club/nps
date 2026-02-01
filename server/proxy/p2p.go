@@ -117,22 +117,29 @@ func (s *P2PServer) handleP2P(addr *net.UDPAddr, data []byte) {
 	}
 
 	if sess.visitorAddr != nil && sess.providerAddr != nil {
+		var visitorLocalChosen string
+		var providerLocalChosen string
+		if sess.visitorLocal != "" && sess.providerLocal != "" {
+			visitorLocalChosen = common.ChooseLocalAddrForPeer(sess.visitorLocal, sess.providerLocal)
+			providerLocalChosen = common.ChooseLocalAddrForPeer(sess.providerLocal, sess.visitorLocal)
+		}
+
 		var toVisitor []byte
 		var toProvider []byte
 		if sess.visitorMode != "" && sess.providerMode != "" {
 			if sess.visitorData != "" || sess.providerData != "" {
-				toVisitor = common.GetWriteStr(sess.providerAddr.String(), sess.visitorAddr.String(), sess.providerLocal, sess.providerMode, sess.providerData)
-				toProvider = common.GetWriteStr(sess.visitorAddr.String(), sess.providerAddr.String(), sess.visitorLocal, sess.visitorMode, sess.visitorData)
+				toVisitor = common.GetWriteStr(sess.providerAddr.String(), providerLocalChosen, sess.providerMode, sess.providerData, sess.visitorAddr.String())
+				toProvider = common.GetWriteStr(sess.visitorAddr.String(), visitorLocalChosen, sess.visitorMode, sess.visitorData, sess.providerAddr.String())
 			} else {
-				toVisitor = common.GetWriteStr(sess.providerAddr.String(), sess.visitorAddr.String(), sess.providerLocal, sess.providerMode)
-				toProvider = common.GetWriteStr(sess.visitorAddr.String(), sess.providerAddr.String(), sess.visitorLocal, sess.visitorMode)
+				toVisitor = common.GetWriteStr(sess.providerAddr.String(), providerLocalChosen, sess.providerMode)
+				toProvider = common.GetWriteStr(sess.visitorAddr.String(), visitorLocalChosen, sess.visitorMode)
 			}
 		} else if sess.visitorLocal != "" && sess.providerLocal != "" {
-			toVisitor = common.GetWriteStr(sess.providerAddr.String(), sess.visitorAddr.String(), sess.providerLocal)
-			toProvider = common.GetWriteStr(sess.visitorAddr.String(), sess.providerAddr.String(), sess.visitorLocal)
+			toVisitor = common.GetWriteStr(sess.providerAddr.String(), providerLocalChosen)
+			toProvider = common.GetWriteStr(sess.visitorAddr.String(), visitorLocalChosen)
 		} else {
-			toVisitor = common.GetWriteStr(sess.providerAddr.String(), sess.visitorAddr.String())
-			toProvider = common.GetWriteStr(sess.visitorAddr.String(), sess.providerAddr.String())
+			toVisitor = []byte(sess.providerAddr.String())
+			toProvider = []byte(sess.visitorAddr.String())
 		}
 		for i := 0; i < 3; i++ {
 			if _, err := s.listener.WriteTo(toVisitor, sess.visitorAddr); err != nil {
