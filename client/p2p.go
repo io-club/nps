@@ -22,7 +22,7 @@ const (
 	// server exchange
 	p2pServerWaitTimeout        = 30 * time.Second
 	p2pServerReadStep           = 1 * time.Second
-	p2pServerCollectMoreTimeout = 3 * time.Second
+	p2pServerCollectMoreTimeout = 5 * time.Second
 
 	// handshake read loop
 	p2pHandshakeReadMax = 1500 * time.Millisecond
