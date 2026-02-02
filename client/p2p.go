@@ -20,8 +20,9 @@ import (
 
 const (
 	// server exchange
-	p2pServerWaitTimeout = 30 * time.Second
-	p2pServerReadStep    = 1 * time.Second
+	p2pServerWaitTimeout        = 30 * time.Second
+	p2pServerReadStep           = 1 * time.Second
+	p2pServerCollectMoreTimeout = 3 * time.Second
 
 	// handshake read loop
 	p2pHandshakeReadMax = 1500 * time.Millisecond
@@ -118,6 +119,23 @@ func handleP2PUdp(
 
 	var punchedAddr net.Addr
 
+	var gotFirstAt time.Time
+	var collectUntil time.Time
+
+	peerGroupCount := func() int {
+		n := 0
+		if peerExt1 != "" {
+			n++
+		}
+		if peerExt2 != "" {
+			n++
+		}
+		if peerExt3 != "" {
+			n++
+		}
+		return n
+	}
+
 	for {
 		select {
 		case <-parentCtx.Done():
@@ -130,9 +148,13 @@ func handleP2PUdp(
 		_ = localConn.SetReadDeadline(time.Now().Add(p2pServerReadStep))
 		n, fromAddr, rerr := localConn.ReadFrom(buf)
 		_ = localConn.SetReadDeadline(time.Time{})
+
 		if rerr != nil {
 			var ne net.Error
 			if errors.As(rerr, &ne) && (ne.Timeout() || ne.Temporary()) {
+				if !gotFirstAt.IsZero() && time.Now().After(collectUntil) {
+					break
+				}
 				continue
 			}
 			err = rerr
@@ -154,6 +176,11 @@ func handleP2PUdp(
 		peerExt, pLocal, m, d, selfExt := parseP2PServerReply(raw)
 		if peerExt == "" {
 			continue
+		}
+
+		if gotFirstAt.IsZero() {
+			gotFirstAt = time.Now()
+			collectUntil = gotFirstAt.Add(p2pServerCollectMoreTimeout)
 		}
 
 		if pLocal != "" && peerLocal == "" {
@@ -187,12 +214,33 @@ func handleP2PUdp(
 
 		logs.Trace("[P2P] server-reply from=%s peerExt=%s peerLocal=%s selfExt=%s mode=%s dataLen=%d", fromAddr.String(), peerExt, pLocal, selfExt, m, len(d))
 
+		// full collected
 		if peerExt1 != "" && peerExt2 != "" && peerExt3 != "" {
+			break
+		}
+
+		// collect-more timeout: once got at least one reply
+		if !gotFirstAt.IsZero() && time.Now().After(collectUntil) {
 			break
 		}
 	}
 
-	logs.Debug("[P2P] collected peerExt=[%s,%s,%s] selfExt=[%s,%s,%s] peerLocal=%s punched=%v", peerExt1, peerExt2, peerExt3, selfExt1, selfExt2, selfExt3, peerLocal, punchedAddr != nil)
+	// Decide forceHard and normalize 2-group case
+	forceHard := false
+	if punchedAddr == nil {
+		cnt := peerGroupCount()
+		if cnt == 1 && !gotFirstAt.IsZero() && time.Now().After(collectUntil) {
+			forceHard = true
+		} else if cnt == 2 {
+			peerExt1, peerExt2, peerExt3 = fillTripletByPortDiff(peerExt1, peerExt2, peerExt3)
+			selfExt1, selfExt2, selfExt3 = fillTripletByPortDiff(selfExt1, selfExt2, selfExt3)
+		}
+	}
+
+	logs.Debug("[P2P] collected peerExt=[%s,%s,%s] selfExt=[%s,%s,%s] peerLocal=%s punched=%v forceHard=%v",
+		peerExt1, peerExt2, peerExt3,
+		selfExt1, selfExt2, selfExt3,
+		peerLocal, punchedAddr != nil, forceHard)
 
 	winConn, remoteAddress, localAddress, role, err := sendP2PTestMsg(
 		parentCtx,
@@ -202,6 +250,7 @@ func handleP2PUdp(
 		peerLocal,
 		selfExt1, selfExt2, selfExt3,
 		punchedAddr,
+		forceHard,
 	)
 	if err != nil {
 		logs.Error("[P2P] sendP2PTestMsg failed local=%s err=%v", localConn.LocalAddr().String(), err)
@@ -342,6 +391,7 @@ func sendP2PTestMsg(
 	peerLocal string,
 	selfExt1, selfExt2, selfExt3 string,
 	punchedAddr net.Addr,
+	forceHard bool,
 ) (winConn net.PacketConn, remoteAddr, localAddr, role string, err error) {
 	parentCtx, parentCancel := context.WithCancel(pCtx)
 
@@ -424,20 +474,27 @@ func sendP2PTestMsg(
 
 	peerRegular := isRegularStep(peerInterval, hasPeerExt)
 	selfHard := hasSelfExt && selfInterval != 0
+	if forceHard {
+		selfHard = true
+	}
 
-	logs.Info("[P2P] nat peer=%s(%d,%v) self=%s(%d) peerLocal=%v",
+	logs.Info("[P2P] nat peer=%s(%d,%v) self=%s(%d) peerLocal=%v forceHard=%v",
 		natHintByInterval(peerInterval, hasPeerExt), peerInterval, peerRegular,
 		natHintByInterval(selfInterval, hasSelfExt), selfInterval,
-		peerLocal != "")
+		peerLocal != "", forceHard)
 
-	// predicted target
+	// predicted target: pick any non-empty peerExt for baseUDP
 	predictedStr := ""
 	if peerExt3 != "" {
 		predictedStr = peerExt3
-		if hasPeerExt {
-			if s, e := getNextAddr(peerExt3, peerInterval); e == nil && s != "" {
-				predictedStr = s
-			}
+	} else if peerExt2 != "" {
+		predictedStr = peerExt2
+	} else if peerExt1 != "" {
+		predictedStr = peerExt1
+	}
+	if predictedStr != "" && hasPeerExt {
+		if s, e := getNextAddr(peerExt3, peerInterval); e == nil && s != "" {
+			predictedStr = s
 		}
 	}
 	targets := uniqAddrStrs(predictedStr, peerExt1, peerExt2, peerExt3)
@@ -479,7 +536,7 @@ func sendP2PTestMsg(
 		})
 	}
 
-	// (2) strategy A or "listen random ports" fallback (frp-like receiver listen ports)
+	// (2) strategy A or "listen random ports" fallback
 	isStrategyA := hasPeerExt && hasSelfExt && peerInterval == 0 && selfInterval != 0 && baseUDP != nil
 	if isStrategyA {
 		logs.Debug("[P2P] strategy=A open-many-listen target=%s", baseUDP.String())
@@ -539,12 +596,15 @@ func sendP2PTestMsg(
 		}
 	}
 
-	// (4) heavy random scan fallback (start earlier if peer looks symmetric-ish)
+	// (4) heavy random scan fallback (start earlier if peer looks symmetric-ish OR forceHard)
 	fallbackDelay := p2pConeFallbackDelay
 	if hasPeerExt && peerInterval != 0 {
 		fallbackDelay = 0
 	}
-	startFallbackRandomScan(parentCtx, &closed, localConn, peerExt2, peerExt3, fallbackDelay)
+	if forceHard {
+		fallbackDelay = 0
+	}
+	startFallbackRandomScan(parentCtx, &closed, localConn, peerExt1, peerExt2, peerExt3, fallbackDelay)
 
 	// (5) keep old strategy B as extra layer (peer hard-ish, self stable-ish)
 	if hasPeerExt && hasSelfExt && peerInterval != 0 && selfInterval == 0 {
@@ -990,12 +1050,15 @@ func startFallbackRandomScan(
 	ctx context.Context,
 	closed *uint32,
 	localConn net.PacketConn,
-	peerExt2, peerExt3 string,
+	peerExt1, peerExt2, peerExt3 string,
 	delay time.Duration,
 ) {
 	ip := hostOnly(peerExt2)
 	if ip == "" {
 		ip = hostOnly(peerExt3)
+	}
+	if ip == "" {
+		ip = hostOnly(peerExt1)
 	}
 	if ip == "" {
 		return
@@ -1045,4 +1108,97 @@ func startFallbackRandomScan(
 			}
 		}
 	}()
+}
+
+// fillTripletByPortDiff:
+// - if already 3 => keep
+// - if 2 => synthesize the missing one based on port difference (so getAddrInterval can work)
+// - if 0/1 => keep (do NOT fake, so hasPeerExt stays false)
+func fillTripletByPortDiff(a1, a2, a3 string) (b1, b2, b3 string) {
+	b1, b2, b3 = a1, a2, a3
+	cnt := 0
+	if b1 != "" {
+		cnt++
+	}
+	if b2 != "" {
+		cnt++
+	}
+	if b3 != "" {
+		cnt++
+	}
+	if cnt != 2 {
+		return
+	}
+
+	getPort := func(s string) int { return common.GetPortByAddr(s) }
+	hostFrom := func(prefer ...string) string {
+		for _, s := range prefer {
+			if s == "" {
+				continue
+			}
+			h := hostOnly(s)
+			if h != "" {
+				return h
+			}
+		}
+		return ""
+	}
+	clampPort := func(p int) int {
+		if p < 1 {
+			return 1
+		}
+		if p > 65535 {
+			return 65535
+		}
+		return p
+	}
+	makeAddr := func(h string, p int) string {
+		if h == "" || p <= 0 {
+			return ""
+		}
+		return net.JoinHostPort(h, strconv.Itoa(clampPort(p)))
+	}
+
+	switch {
+	case b1 == "":
+		// have b2,b3 => infer b1 = b2 - (b3-b2)
+		p2, p3 := getPort(b2), getPort(b3)
+		if p2 == 0 || p3 == 0 {
+			return
+		}
+		d := p3 - p2
+		h := hostFrom(b2, b3)
+		if d == 0 {
+			b1 = b2
+		} else {
+			b1 = makeAddr(h, p2-d)
+		}
+	case b2 == "":
+		// have b1,b3 => infer b2 = b1 + (b3-b1)/2
+		p1, p3 := getPort(b1), getPort(b3)
+		if p1 == 0 || p3 == 0 {
+			return
+		}
+		d := (p3 - p1) / 2
+		h := hostFrom(b1, b3)
+		if d == 0 {
+			b2 = b1
+		} else {
+			b2 = makeAddr(h, p1+d)
+		}
+	case b3 == "":
+		// have b1,b2 => infer b3 = b2 + (b2-b1)
+		p1, p2 := getPort(b1), getPort(b2)
+		if p1 == 0 || p2 == 0 {
+			return
+		}
+		d := p2 - p1
+		h := hostFrom(b1, b2)
+		if d == 0 {
+			b3 = b2
+		} else {
+			b3 = makeAddr(h, p2+d)
+		}
+	}
+	return
 }
