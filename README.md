@@ -136,6 +136,10 @@ npc update && npc restart
 
 - **Main**
   - 待定，优先修BUG，新功能随缘更新
+
+### Stable
+
+- **v0.34.0 (2026-02-02)**
   - 增强P2P打洞能力（不再兼容旧版） [#198](https://github.com/djylb/nps/pull/198) (感谢[cr4n5](https://github.com/cr4n5))
   - 避免连接过程超时断连
   - 混合代理添加白名单功能 [#205](https://github.com/djylb/nps/pull/205) (感谢[Yourdaylight](https://github.com/Yourdaylight))
@@ -143,9 +147,8 @@ npc update && npc restart
   - P2P优先使用IPv6直连
   - 优化P2P处理性能
   - 恢复P2P旧版客户端兼容性
+  - 修复Win下P2P打洞失败
   - 更新相关依赖包
-
-### Stable
 
 - **v0.33.14 (2026-01-22)**
   - 调整限速逻辑

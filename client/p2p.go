@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -17,12 +18,62 @@ import (
 	"github.com/djylb/nps/lib/logs"
 )
 
+const (
+	// server exchange
+	p2pServerWaitTimeout = 30 * time.Second
+	p2pServerReadStep    = 1 * time.Second
+
+	// handshake read loop
+	p2pHandshakeReadMax = 1500 * time.Millisecond
+
+	// strategy A (open many local ports)
+	p2pStrategyAConnCount = 256
+
+	// base send
+	p2pConeSendTick   = 800 * time.Millisecond
+	p2pConeBurstCount = 3
+	p2pConeBurstGap   = 80 * time.Millisecond
+
+	// near scan (regular ports change)
+	p2pConeNearScanCount = 128
+	p2pConeNearScanRange = 256
+	p2pConeNearScanTick  = 1500 * time.Millisecond
+
+	// heavy random scan fallback
+	p2pConeFallbackDelay = 1800 * time.Millisecond
+	p2pConeFallbackCount = 512
+	p2pConeFallbackTick  = 2 * time.Second
+
+	// extra listen ports when self seems symmetric-ish (receiver-like)
+	p2pSelfHardExtraListenCount = 128
+
+	// handshake budgets / throttling
+	p2pSuccMinInterval = 800 * time.Millisecond
+	p2pEndMinInterval  = 800 * time.Millisecond
+
+	p2pSuccBurstOnConnect = 4
+	p2pSuccEchoOnSuccess  = 2
+	p2pEndBurstOnSuccess  = 4
+	p2pEndBurstOnEndAck   = 2
+
+	p2pMaxSuccPacketsPerPeer = 20
+	p2pMaxEndPacketsPerPeer  = 20
+)
+
+var (
+	bConnDataSeq = []byte(common.CONN_DATA_SEQ)
+	bConnect     = []byte(common.WORK_P2P_CONNECT)
+	bSuccess     = []byte(common.WORK_P2P_SUCCESS)
+	bEnd         = []byte(common.WORK_P2P_END)
+)
+
 func handleP2PUdp(
 	pCtx context.Context,
 	localAddr, rAddr, md5Password, sendRole, sendMode, sendData string,
 ) (c net.PacketConn, remoteAddress, localAddress, role, mode, data string, err error) {
 	localAddress = localAddr
-	parentCtx, parentCancel := context.WithTimeout(pCtx, 30*time.Second)
+
+	parentCtx, parentCancel := context.WithTimeout(pCtx, p2pServerWaitTimeout)
 	defer parentCancel()
 
 	localConn, err := conn.NewUdpConnByAddr(localAddr)
@@ -43,9 +94,12 @@ func handleP2PUdp(
 		port = common.GetPortStrByAddr(localConn.LocalAddr().String())
 	}
 	localCandidates := buildP2PLocalStr(port)
+	if localCandidates == "" {
+		// fallback: at least report one addr
+		localCandidates = localAddr
+	}
 
-	logs.Debug("[P2P] start role=%s local=%s server=%s port=%s candidates=%s mode=%s dataLen=%d",
-		sendRole, localConn.LocalAddr().String(), rAddr, port, localCandidates, sendMode, len(sendData))
+	logs.Debug("[P2P] start role=%s local=%s server=%s port=%s candidates=%s mode=%s dataLen=%d", sendRole, localConn.LocalAddr().String(), rAddr, port, localCandidates, sendMode, len(sendData))
 
 	for seq := 0; seq < 3; seq++ {
 		if err = getRemoteAddressFromServer(rAddr, localCandidates, localConn, md5Password, sendRole, sendMode, sendData, seq); err != nil {
@@ -59,7 +113,9 @@ func handleP2PUdp(
 	var peerLocal string
 	serverPort := common.GetPortByAddr(rAddr)
 
-	buf := make([]byte, 1024)
+	buf := common.BufPoolUdp.Get().([]byte)
+	defer common.PutBufPoolUdp(buf)
+
 	var punchedAddr net.Addr
 
 	for {
@@ -71,7 +127,7 @@ func handleP2PUdp(
 		default:
 		}
 
-		_ = localConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		_ = localConn.SetReadDeadline(time.Now().Add(p2pServerReadStep))
 		n, fromAddr, rerr := localConn.ReadFrom(buf)
 		_ = localConn.SetReadDeadline(time.Time{})
 		if rerr != nil {
@@ -84,14 +140,17 @@ func handleP2PUdp(
 			return
 		}
 
-		raw := string(buf[:n])
-		if raw == common.WORK_P2P_CONNECT {
+		pkt := buf[:n]
+
+		// punched-in fast path
+		if bytes.Equal(pkt, bConnect) {
 			punchedAddr = fromAddr
 			logs.Debug("[P2P] punched-in CONNECT from=%s local=%s", fromAddr.String(), localConn.LocalAddr().String())
-			_, _ = localConn.WriteTo([]byte(common.WORK_P2P_SUCCESS), fromAddr)
+			_, _ = localConn.WriteTo(bSuccess, fromAddr)
 			break
 		}
 
+		raw := string(pkt)
 		peerExt, pLocal, m, d, selfExt := parseP2PServerReply(raw)
 		if peerExt == "" {
 			continue
@@ -126,16 +185,14 @@ func handleP2PUdp(
 			}
 		}
 
-		logs.Trace("[P2P] server-reply from=%s peerExt=%s peerLocal=%s selfExt=%s mode=%s dataLen=%d",
-			fromAddr.String(), peerExt, pLocal, selfExt, m, len(d))
+		logs.Trace("[P2P] server-reply from=%s peerExt=%s peerLocal=%s selfExt=%s mode=%s dataLen=%d", fromAddr.String(), peerExt, pLocal, selfExt, m, len(d))
 
 		if peerExt1 != "" && peerExt2 != "" && peerExt3 != "" {
 			break
 		}
 	}
 
-	logs.Debug("[P2P] collected peerExt=[%s,%s,%s] selfExt=[%s,%s,%s] peerLocal=%s punched=%v",
-		peerExt1, peerExt2, peerExt3, selfExt1, selfExt2, selfExt3, peerLocal, punchedAddr != nil)
+	logs.Debug("[P2P] collected peerExt=[%s,%s,%s] selfExt=[%s,%s,%s] peerLocal=%s punched=%v", peerExt1, peerExt2, peerExt3, selfExt1, selfExt2, selfExt3, peerLocal, punchedAddr != nil)
 
 	winConn, remoteAddress, localAddress, role, err := sendP2PTestMsg(
 		parentCtx,
@@ -165,6 +222,9 @@ func handleP2PUdp(
 		logs.Trace("[P2P] fix listen addr remote=%s local=%s -> %s", remoteAddress, localAddress, fixedLocal)
 		localAddress = fixedLocal
 	}
+	if network == "" {
+		network = "udp"
+	}
 
 	needRecreate := false
 	if _, ok := winConn.(*conn.SmartUdpConn); ok {
@@ -181,13 +241,13 @@ func handleP2PUdp(
 			logs.Error("[P2P] net.ListenPacket failed network=%s local=%s err=%v", network, localAddress, err)
 			return
 		}
+		logs.Debug("[P2P] recreate conn local=%s network=%s", localAddress, network)
 	} else {
 		c = winConn
 	}
 
 	handedOff = true
 	logs.Info("[P2P] connected role=%s remote=%s local=%s", role, remoteAddress, localAddress)
-	logs.Debug("[P2P] handshake done role=%s remote=%s local=%s", role, remoteAddress, localAddress)
 	return
 }
 
@@ -241,7 +301,7 @@ func getRemoteAddressFromServer(
 	if _, err := localConn.WriteTo(payload, addr); err != nil {
 		return err
 	}
-	logs.Trace("[P2P] sent req to server=%s local=%s add=%d candidates=%s", addr.String(), localConn.LocalAddr().String(), add, localCandidates)
+	//logs.Trace("[P2P] sent req to server=%s local=%s add=%d candidates=%s", addr.String(), localConn.LocalAddr().String(), add, localCandidates)
 	return nil
 }
 
@@ -302,12 +362,12 @@ func sendP2PTestMsg(
 			}
 			return
 		}
-
 		for _, c := range connList {
 			_ = c.Close()
 		}
 	}()
 
+	// fast path: already punched in
 	if punchedAddr != nil {
 		logs.Debug("[P2P] fast-path punched=%s", punchedAddr.String())
 		rAddr, lAddr, rRole, rErr := waitP2PHandshakeSeed(parentCtx, localConn, sendRole, 10, punchedAddr)
@@ -315,9 +375,10 @@ func sendP2PTestMsg(
 			winner = localConn
 			return localConn, rAddr, lAddr, rRole, nil
 		}
-		return nil, "", "", sendRole, rErr
+		logs.Info("[P2P] fast-path failed punched=%s err=%v, fallback to normal strategy", punchedAddr.String(), rErr)
 	}
 
+	// try peer local first
 	if peerLocal != "" {
 		logs.Debug("[P2P] peerLocal=%s", peerLocal)
 		go func() {
@@ -335,7 +396,7 @@ func sendP2PTestMsg(
 				if atomic.LoadUint32(&closed) != 0 {
 					return
 				}
-				_, _ = localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), remoteUdpLocal)
+				_, _ = localConn.WriteTo(bConnect, remoteUdpLocal)
 				time.Sleep(100 * time.Millisecond)
 			}
 		}()
@@ -361,52 +422,29 @@ func sendP2PTestMsg(
 		}
 	}
 
-	logs.Info("[P2P] nat peer=%s(%d) self=%s(%d)",
-		natHintByInterval(peerInterval, hasPeerExt), peerInterval,
-		natHintByInterval(selfInterval, hasSelfExt), selfInterval)
+	peerRegular := isRegularStep(peerInterval, hasPeerExt)
+	selfHard := hasSelfExt && selfInterval != 0
 
-	switch {
-	case hasPeerExt && hasSelfExt && peerInterval == 0 && selfInterval != 0:
-		logs.Debug("[P2P] strategy=A peerExt3=%s", peerExt3)
+	logs.Info("[P2P] nat peer=%s(%d,%v) self=%s(%d) peerLocal=%v",
+		natHintByInterval(peerInterval, hasPeerExt), peerInterval, peerRegular,
+		natHintByInterval(selfInterval, hasSelfExt), selfInterval,
+		peerLocal != "")
 
-		targetAddr, e := getNextAddr(peerExt3, peerInterval)
-		if e != nil {
-			return nil, "", localConn.LocalAddr().String(), sendRole, e
-		}
-		targetUDP, e := net.ResolveUDPAddr("udp", targetAddr)
-		if e != nil {
-			return nil, "", localConn.LocalAddr().String(), sendRole, e
-		}
-
-		want4 := targetUDP.IP != nil && targetUDP.IP.To4() != nil
-		var network string
-		var lip net.IP
-		if want4 {
-			network = "udp4"
-			lip, e = common.GetLocalUdp4IP()
-		} else {
-			network = "udp6"
-			lip, e = common.GetLocalUdp6IP()
-		}
-		if e != nil || lip == nil || common.IsZeroIP(lip) || lip.IsUnspecified() {
-			logs.Error("[P2P] strategy=A get local ip failed network=%s err=%v", network, e)
-			return nil, "", localConn.LocalAddr().String(), sendRole, errors.New("no usable local ip")
-		}
-		lip = common.NormalizeIP(lip)
-
-		for i := 0; i < 256; i++ {
-			uc, ee := net.ListenUDP(network, &net.UDPAddr{IP: lip, Port: 0})
-			if ee != nil {
-				continue
+	// predicted target
+	predictedStr := ""
+	if peerExt3 != "" {
+		predictedStr = peerExt3
+		if hasPeerExt {
+			if s, e := getNextAddr(peerExt3, peerInterval); e == nil && s != "" {
+				predictedStr = s
 			}
-			connList = append(connList, uc)
-			time.Sleep(3 * time.Millisecond)
 		}
+	}
+	targets := uniqAddrStrs(predictedStr, peerExt1, peerExt2, peerExt3)
 
-		logs.Debug("[P2P] strategy=A target=%s connCount=%d", targetUDP.String(), len(connList))
-
+	startTickerSender := func(interval time.Duration, fn func()) {
 		go func() {
-			ticker := time.NewTicker(500 * time.Millisecond)
+			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 			for {
 				select {
@@ -416,13 +454,139 @@ func sendP2PTestMsg(
 					if atomic.LoadUint32(&closed) != 0 {
 						return
 					}
-					for _, c := range connList {
-						_, _ = c.WriteTo([]byte(common.WORK_P2P_CONNECT), targetUDP)
+					fn()
+				}
+			}
+		}()
+	}
+
+	// (1) Base: burst to all candidates + tick to predicted
+	baseUDP := resolveUDPAddr(predictedStr)
+	if len(targets) > 0 {
+		go func() {
+			for _, t := range targets {
+				ua := resolveUDPAddr(t)
+				if ua == nil {
+					continue
+				}
+				_ = sendBurstWithGap(localConn, bConnect, ua, p2pConeBurstCount, p2pConeBurstGap)
+			}
+		}()
+	}
+	if baseUDP != nil {
+		startTickerSender(p2pConeSendTick, func() {
+			_, _ = localConn.WriteTo(bConnect, baseUDP)
+		})
+	}
+
+	// (2) strategy A or "listen random ports" fallback (frp-like receiver listen ports)
+	isStrategyA := hasPeerExt && hasSelfExt && peerInterval == 0 && selfInterval != 0 && baseUDP != nil
+	if isStrategyA {
+		logs.Debug("[P2P] strategy=A open-many-listen target=%s", baseUDP.String())
+		extra, e := openRandomListenConnsForTarget(baseUDP, p2pStrategyAConnCount)
+		if e == nil && len(extra) > 0 {
+			connList = append(connList, extra...)
+		}
+		startTickerSender(500*time.Millisecond, func() {
+			for _, c := range connList {
+				_, _ = c.WriteTo(bConnect, baseUDP)
+			}
+		})
+	} else if selfHard && baseUDP != nil {
+		logs.Debug("[P2P] fallback: self hard-ish => open extra listen=%d target=%s", p2pSelfHardExtraListenCount, baseUDP.String())
+		extra, e := openRandomListenConnsForTarget(baseUDP, p2pSelfHardExtraListenCount)
+		if e == nil && len(extra) > 0 {
+			connList = append(connList, extra...)
+		}
+		startTickerSender(600*time.Millisecond, func() {
+			for _, c := range connList {
+				_, _ = c.WriteTo(bConnect, baseUDP)
+			}
+		})
+	}
+
+	// (3) near-scan when peer ports change seems regular
+	if baseUDP != nil && peerRegular {
+		ip := hostOnly(peerExt2)
+		if ip == "" {
+			ip = hostOnly(peerExt3)
+		}
+		if ip != "" {
+			predPort := common.GetPortByAddr(baseUDP.String())
+			minP := common.Max(1, predPort-p2pConeNearScanRange)
+			maxP := common.Min(65535, predPort+p2pConeNearScanRange)
+			ports := getRandomUniquePorts(p2pConeNearScanCount, minP, maxP)
+
+			nearAddrs := make([]*net.UDPAddr, 0, len(ports))
+			for _, p := range ports {
+				ua, e := net.ResolveUDPAddr("udp", net.JoinHostPort(ip, strconv.Itoa(p)))
+				if e == nil && ua != nil {
+					nearAddrs = append(nearAddrs, ua)
+				}
+			}
+
+			go func() {
+				for _, ua := range nearAddrs {
+					_, _ = localConn.WriteTo(bConnect, ua)
+				}
+			}()
+
+			startTickerSender(p2pConeNearScanTick, func() {
+				for _, ua := range nearAddrs {
+					_, _ = localConn.WriteTo(bConnect, ua)
+				}
+			})
+		}
+	}
+
+	// (4) heavy random scan fallback (start earlier if peer looks symmetric-ish)
+	fallbackDelay := p2pConeFallbackDelay
+	if hasPeerExt && peerInterval != 0 {
+		fallbackDelay = 0
+	}
+	startFallbackRandomScan(parentCtx, &closed, localConn, peerExt2, peerExt3, fallbackDelay)
+
+	// (5) keep old strategy B as extra layer (peer hard-ish, self stable-ish)
+	if hasPeerExt && hasSelfExt && peerInterval != 0 && selfInterval == 0 {
+		logs.Debug("[P2P] strategy=B peer hard-ish, self easy-ish => broad random scan")
+		go func() {
+			ip := hostOnly(peerExt2)
+			if ip == "" {
+				return
+			}
+			ports := getRandomUniquePorts(1000, 1, 65535)
+			udpAddrs := make([]*net.UDPAddr, 0, len(ports))
+			for _, p := range ports {
+				ra, e := net.ResolveUDPAddr("udp", net.JoinHostPort(ip, strconv.Itoa(p)))
+				if e == nil && ra != nil {
+					udpAddrs = append(udpAddrs, ra)
+				}
+			}
+
+			for _, ra := range udpAddrs {
+				_, _ = localConn.WriteTo(bConnect, ra)
+			}
+
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-parentCtx.Done():
+					return
+				case <-ticker.C:
+					if atomic.LoadUint32(&closed) != 0 {
+						return
+					}
+					for _, ra := range udpAddrs {
+						_, _ = localConn.WriteTo(bConnect, ra)
 					}
 				}
 			}
 		}()
+	}
 
+	// wait handshake (race when multiple conns exist)
+	if len(connList) > 1 {
 		type P2PResult struct {
 			Conn       net.PacketConn
 			RemoteAddr string
@@ -454,145 +618,9 @@ func sendP2PTestMsg(
 		case <-parentCtx.Done():
 			return nil, "", localConn.LocalAddr().String(), sendRole, errors.New("connect to the target failed, maybe the nat type is not support p2p")
 		}
-
-	case hasPeerExt && hasSelfExt && peerInterval != 0 && selfInterval == 0:
-		logs.Debug("[P2P] strategy=B random-scan (peer symmetric-ish, self stable-ish) peerExt3=%s peerExt2=%s", peerExt3, peerExt2)
-
-		go func() {
-			addr, e := getNextAddr(peerExt3, peerInterval)
-			if e != nil {
-				return
-			}
-			remoteUDP, e := net.ResolveUDPAddr("udp", addr)
-			if e != nil {
-				return
-			}
-			logs.Trace("[P2P] strategy=B predicted target sender target=%s", remoteUDP.String())
-
-			ticker := time.NewTicker(500 * time.Millisecond)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-parentCtx.Done():
-					return
-				case <-ticker.C:
-					if atomic.LoadUint32(&closed) != 0 {
-						return
-					}
-					_, _ = localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), remoteUDP)
-				}
-			}
-		}()
-
-		go func() {
-			ip := common.RemovePortFromHost(peerExt2)
-			ports := getRandomUniquePorts(1000, 1, 65535)
-			logs.Debug("[P2P] strategy=B scanning ip=%s ports=%d", ip, len(ports))
-
-			udpAddrs := make([]*net.UDPAddr, 0, len(ports))
-			for _, p := range ports {
-				ra, e := net.ResolveUDPAddr("udp", ip+":"+strconv.Itoa(p))
-				if e == nil {
-					udpAddrs = append(udpAddrs, ra)
-				}
-			}
-
-			for _, ra := range udpAddrs {
-				_, _ = localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), ra)
-			}
-
-			ticker := time.NewTicker(2 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-parentCtx.Done():
-					return
-				case <-ticker.C:
-					if atomic.LoadUint32(&closed) != 0 {
-						return
-					}
-					for _, ra := range udpAddrs {
-						_, _ = localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), ra)
-					}
-				}
-			}
-		}()
-
-	default:
-		logs.Debug("[P2P] strategy=Default peerInterval=%d peerExt3=%s", peerInterval, peerExt3)
-
-		if peerExt3 != "" {
-			go func() {
-				addr, e := getNextAddr(peerExt3, peerInterval)
-				if e != nil {
-					return
-				}
-				remoteUDP, e := net.ResolveUDPAddr("udp", addr)
-				if e != nil {
-					return
-				}
-				ticker := time.NewTicker(500 * time.Millisecond)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-parentCtx.Done():
-						return
-					case <-ticker.C:
-						if atomic.LoadUint32(&closed) != 0 {
-							return
-						}
-						_, _ = localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), remoteUDP)
-					}
-				}
-			}()
-		}
-
-		if peerInterval != 0 && peerExt1 != "" && peerExt2 != "" && peerExt3 != "" {
-			go func() {
-				ip := common.RemovePortFromHost(peerExt2)
-				p1 := common.GetPortByAddr(peerExt1)
-				p2 := common.GetPortByAddr(peerExt2)
-				p3 := common.GetPortByAddr(peerExt3)
-
-				startPort := p3
-				endPort := startPort + (peerInterval * 50)
-				if (p1 < p3 && p3 < p2) || (p1 > p3 && p3 > p2) {
-					endPort = endPort + (p2 - p3)
-				}
-				endPort = common.GetPort(endPort)
-
-				ports := getRandomUniquePorts(51, startPort, endPort)
-				udpAddrs := make([]*net.UDPAddr, 0, len(ports))
-				for _, p := range ports {
-					ra, e := net.ResolveUDPAddr("udp", ip+":"+strconv.Itoa(p))
-					if e == nil {
-						udpAddrs = append(udpAddrs, ra)
-					}
-				}
-
-				for _, ra := range udpAddrs {
-					_, _ = localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), ra)
-				}
-
-				ticker := time.NewTicker(2 * time.Second)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-parentCtx.Done():
-						return
-					case <-ticker.C:
-						if atomic.LoadUint32(&closed) != 0 {
-							return
-						}
-						for _, ra := range udpAddrs {
-							_, _ = localConn.WriteTo([]byte(common.WORK_P2P_CONNECT), ra)
-						}
-					}
-				}
-			}()
-		}
 	}
 
+	// single conn
 	rAddr, lAddr, rRole, rErr := waitP2PHandshake(parentCtx, localConn, sendRole, 10)
 	if rErr == nil {
 		winner = localConn
@@ -602,67 +630,71 @@ func sendP2PTestMsg(
 }
 
 func waitP2PHandshakeSeed(parentCtx context.Context, localConn net.PacketConn, sendRole string, readTimeout int, seed net.Addr) (remoteAddr, localAddr, role string, err error) {
-	if seed != nil {
-		_, _ = localConn.WriteTo([]byte(common.WORK_P2P_SUCCESS), seed)
-		go func(a net.Addr) {
-			ticker := time.NewTicker(time.Second)
-			defer ticker.Stop()
-			for i := 0; i < 20; i++ {
-				select {
-				case <-parentCtx.Done():
-					return
-				case <-ticker.C:
-				}
-				_, _ = localConn.WriteTo([]byte(common.WORK_P2P_SUCCESS), a)
-			}
-		}(seed)
-	}
-	return waitP2PHandshake(parentCtx, localConn, sendRole, readTimeout)
+	return waitP2PHandshakeWithSeed(parentCtx, localConn, sendRole, readTimeout, seed)
 }
 
 func waitP2PHandshake(parentCtx context.Context, localConn net.PacketConn, sendRole string, readTimeout int) (remoteAddr, localAddr, role string, err error) {
-	buf := make([]byte, 10)
+	return waitP2PHandshakeWithSeed(parentCtx, localConn, sendRole, readTimeout, nil)
+}
 
-	var senderStarted uint32
-	var lastConnectAddr atomic.Value // stores net.Addr (*net.UDPAddr)
+func waitP2PHandshakeWithSeed(parentCtx context.Context, localConn net.PacketConn, sendRole string, readTimeout int, seed net.Addr) (remoteAddr, localAddr, role string, err error) {
+	buf := common.BufPoolUdp.Get().([]byte)
+	defer common.PutBufPoolUdp(buf)
 
-	startSuccessSender := func() {
-		if !atomic.CompareAndSwapUint32(&senderStarted, 0, 1) {
-			return
-		}
-		go func() {
-			ticker := time.NewTicker(time.Second)
-			defer ticker.Stop()
-
-			for i := 0; i < 20; i++ {
-				select {
-				case <-parentCtx.Done():
-					return
-				case <-ticker.C:
-				}
-
-				v := lastConnectAddr.Load()
-				if v == nil {
-					continue
-				}
-				a := v.(net.Addr)
-				logs.Trace("[P2P] retry SUCCESS to=%s local=%s", a.String(), localConn.LocalAddr().String())
-				_, _ = localConn.WriteTo([]byte(common.WORK_P2P_SUCCESS), a)
-			}
-		}()
+	isServerAnnounce := func(pkt []byte) bool {
+		return bytes.Contains(pkt, bConnDataSeq)
 	}
 
+	sendBurst := func(msg []byte, a net.Addr, burst int) error {
+		if a == nil {
+			return nil
+		}
+		if burst <= 0 {
+			burst = 1
+		}
+		for i := 0; i < burst; i++ {
+			if _, e := localConn.WriteTo(msg, a); e != nil {
+				return e
+			}
+		}
+		return nil
+	}
+
+	type peerState struct {
+		lastSuccSend time.Time
+		lastEndSend  time.Time
+		succSent     int
+		endSent      int
+	}
+	states := make(map[string]*peerState, 32)
+	getState := func(k string) *peerState {
+		if s, ok := states[k]; ok {
+			return s
+		}
+		s := &peerState{}
+		states[k] = s
+		return s
+	}
+
+	if seed != nil {
+		_ = sendBurst(bConnect, seed, 1)
+		_ = sendBurst(bSuccess, seed, 3)
+	}
+
+	if readTimeout <= 0 {
+		readTimeout = 10
+	}
 	logs.Trace("[P2P] handshake wait role=%s local=%s timeout=%ds", sendRole, localConn.LocalAddr().String(), readTimeout)
 
-Loop:
 	for {
 		select {
 		case <-parentCtx.Done():
-			break Loop
+			logs.Error("[P2P] handshake fail role=%s local=%s err=%v", sendRole, localConn.LocalAddr().String(), parentCtx.Err())
+			return "", localConn.LocalAddr().String(), sendRole, errors.New("connect to the target failed, maybe the nat type is not support p2p")
 		default:
 		}
 
-		_ = localConn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(readTimeout)))
+		_ = localConn.SetReadDeadline(time.Now().Add(p2pHandshakeReadMax))
 		n, addr, rerr := localConn.ReadFrom(buf)
 		_ = localConn.SetReadDeadline(time.Time{})
 		if rerr != nil {
@@ -670,83 +702,110 @@ Loop:
 			if errors.As(rerr, &ne) && (ne.Timeout() || ne.Temporary()) {
 				continue
 			}
-			break
+			logs.Error("[P2P] handshake read fail role=%s local=%s err=%v", sendRole, localConn.LocalAddr().String(), rerr)
+			return "", localConn.LocalAddr().String(), sendRole, rerr
 		}
 
-		pkt := string(buf[:n])
-		switch pkt {
-		case common.WORK_P2P_SUCCESS:
-			logs.Debug("[P2P] handshake recv SUCCESS from=%s local=%s role=%s -> send END x20", addr.String(), localConn.LocalAddr().String(), sendRole)
+		pkt := buf[:n]
+		if isServerAnnounce(pkt) {
+			continue
+		}
 
-			for i := 20; i > 0; i-- {
-				if _, werr := localConn.WriteTo([]byte(common.WORK_P2P_END), addr); werr != nil {
-					return "", localConn.LocalAddr().String(), sendRole, werr
-				}
+		from := addr.String()
+		now := time.Now()
+		st := getState(from)
+
+		switch {
+		case bytes.Equal(pkt, bConnect):
+			// CONNECT -> SUCCESS (throttled + budget)
+			if st.succSent >= p2pMaxSuccPacketsPerPeer {
+				continue
 			}
+			if now.Sub(st.lastSuccSend) < p2pSuccMinInterval {
+				continue
+			}
+			st.lastSuccSend = now
 
+			burst := p2pSuccBurstOnConnect
+			if st.succSent+burst > p2pMaxSuccPacketsPerPeer {
+				burst = p2pMaxSuccPacketsPerPeer - st.succSent
+			}
+			st.succSent += burst
+
+			logs.Trace("[P2P] recv CONNECT from=%s local=%s -> send SUCCESS x%d", from, localConn.LocalAddr().String(), burst)
+			_ = sendBurst(bSuccess, addr, burst)
+
+		case bytes.Equal(pkt, bSuccess):
 			if sendRole == common.WORK_P2P_VISITOR {
-				for {
-					select {
-					case <-parentCtx.Done():
-						break Loop
-					default:
-					}
+				// visitor: SUCCESS -> END (throttled + budget)
+				if st.endSent >= p2pMaxEndPacketsPerPeer {
+					continue
+				}
+				if now.Sub(st.lastEndSend) < p2pEndMinInterval {
+					continue
+				}
+				st.lastEndSend = now
 
-					_ = localConn.SetReadDeadline(time.Now().Add(time.Second))
-					n2, addr2, e2 := localConn.ReadFrom(buf)
-					_ = localConn.SetReadDeadline(time.Time{})
-					if e2 != nil {
-						var ne net.Error
-						if errors.As(e2, &ne) && (ne.Timeout() || ne.Temporary()) {
-							continue
-						}
-						break Loop
-					}
+				burst := p2pEndBurstOnSuccess
+				if st.endSent+burst > p2pMaxEndPacketsPerPeer {
+					burst = p2pMaxEndPacketsPerPeer - st.endSent
+				}
+				st.endSent += burst
 
-					if string(buf[:n2]) == common.WORK_P2P_END {
-						logs.Debug("[P2P] handshake OK role=%s remote=%s local=%s", common.WORK_P2P_VISITOR, addr2.String(), localConn.LocalAddr().String())
+				logs.Trace("[P2P] visitor recv SUCCESS from=%s local=%s -> send END x%d", from, localConn.LocalAddr().String(), burst)
+				if e := sendBurst(bEnd, addr, burst); e != nil {
+					return "", localConn.LocalAddr().String(), sendRole, e
+				}
+			} else {
+				if st.succSent >= p2pMaxSuccPacketsPerPeer {
+					continue
+				}
+				if now.Sub(st.lastSuccSend) < p2pSuccMinInterval {
+					continue
+				}
+				st.lastSuccSend = now
 
-						_, fixedLocal, ferr := common.FixUdpListenAddrForRemote(addr2.String(), localConn.LocalAddr().String())
-						if ferr != nil {
-							return "", "", sendRole, ferr
-						}
-						return addr2.String(), fixedLocal, common.WORK_P2P_VISITOR, nil
-					}
+				burst := p2pSuccEchoOnSuccess
+				if st.succSent+burst > p2pMaxSuccPacketsPerPeer {
+					burst = p2pMaxSuccPacketsPerPeer - st.succSent
+				}
+				st.succSent += burst
+
+				logs.Trace("[P2P] provider recv SUCCESS from=%s local=%s -> echo SUCCESS x%d", from, localConn.LocalAddr().String(), burst)
+				_ = sendBurst(bSuccess, addr, burst)
+			}
+
+		case bytes.Equal(pkt, bEnd):
+			// END: strongest evidence; ack a little (throttled), then accept
+			if st.endSent < p2pMaxEndPacketsPerPeer && now.Sub(st.lastEndSend) >= p2pEndMinInterval {
+				st.lastEndSend = now
+				burst := p2pEndBurstOnEndAck
+				if st.endSent+burst > p2pMaxEndPacketsPerPeer {
+					burst = p2pMaxEndPacketsPerPeer - st.endSent
+				}
+				if burst > 0 {
+					st.endSent += burst
+					_ = sendBurst(bEnd, addr, burst)
 				}
 			}
 
-			logs.Debug("[P2P] handshake OK role=%s remote=%s local=%s", common.WORK_P2P_PROVIDER, addr.String(), localConn.LocalAddr().String())
+			wantRole := common.WORK_P2P_PROVIDER
+			if sendRole == common.WORK_P2P_VISITOR {
+				wantRole = common.WORK_P2P_VISITOR
+			}
 
-			_, fixedLocal, ferr := common.FixUdpListenAddrForRemote(addr.String(), localConn.LocalAddr().String())
+			_, fixedLocal, ferr := common.FixUdpListenAddrForRemote(from, localConn.LocalAddr().String())
 			if ferr != nil {
 				return "", "", sendRole, ferr
 			}
-			return addr.String(), fixedLocal, common.WORK_P2P_PROVIDER, nil
 
-		case common.WORK_P2P_END:
-			logs.Debug("[P2P] handshake OK role=%s remote=%s local=%s", common.WORK_P2P_VISITOR, addr.String(), localConn.LocalAddr().String())
-
-			_, fixedLocal, ferr := common.FixUdpListenAddrForRemote(addr.String(), localConn.LocalAddr().String())
-			if ferr != nil {
-				return "", "", sendRole, ferr
-			}
-			return addr.String(), fixedLocal, common.WORK_P2P_VISITOR, nil
-
-		case common.WORK_P2P_CONNECT:
-			logs.Debug("[P2P] handshake recv CONNECT from=%s local=%s -> send SUCCESS + retry", addr.String(), localConn.LocalAddr().String())
-
-			lastConnectAddr.Store(addr)
-			_, _ = localConn.WriteTo([]byte(common.WORK_P2P_SUCCESS), addr)
-			startSuccessSender()
+			logs.Debug("[P2P] handshake OK role=%s remote=%s local=%s", wantRole, from, fixedLocal)
+			return from, fixedLocal, wantRole, nil
 
 		default:
-			logs.Trace("[P2P] handshake recv unknown pkt=%q from=%s local=%s", pkt, addr.String(), localConn.LocalAddr().String())
 			continue
 		}
 	}
-
-	logs.Error("[P2P] handshake fail role=%s local=%s err=timeout/canceled", sendRole, localConn.LocalAddr().String())
-	return "", localConn.LocalAddr().String(), sendRole, errors.New("connect to the target failed, maybe the nat type is not support p2p")
 }
 
 func getNextAddr(addr string, n int) (string, error) {
@@ -818,4 +877,172 @@ func natHintByInterval(interval int, has bool) string {
 		return "cone-ish"
 	}
 	return "symmetric-ish"
+}
+
+func uniqAddrStrs(ss ...string) []string {
+	out := make([]string, 0, len(ss))
+	seen := make(map[string]struct{}, len(ss))
+	for _, s := range ss {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func resolveUDPAddr(s string) *net.UDPAddr {
+	if s == "" {
+		return nil
+	}
+	ua, err := net.ResolveUDPAddr("udp", s)
+	if err != nil {
+		return nil
+	}
+	return ua
+}
+
+func hostOnly(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	h, _, err := net.SplitHostPort(addr)
+	if err == nil {
+		return h
+	}
+	return common.RemovePortFromHost(addr)
+}
+
+func isRegularStep(interval int, has bool) bool {
+	if !has {
+		return false
+	}
+	if interval == 0 {
+		return false
+	}
+	a := interval
+	if a < 0 {
+		a = -a
+	}
+	return a >= 1 && a <= 5
+}
+
+func sendBurstWithGap(c net.PacketConn, msg []byte, a net.Addr, burst int, gap time.Duration) error {
+	if c == nil || a == nil || burst <= 0 {
+		return nil
+	}
+	if gap <= 0 {
+		for i := 0; i < burst; i++ {
+			if _, e := c.WriteTo(msg, a); e != nil {
+				return e
+			}
+		}
+		return nil
+	}
+	for i := 0; i < burst; i++ {
+		if _, e := c.WriteTo(msg, a); e != nil {
+			return e
+		}
+		time.Sleep(gap)
+	}
+	return nil
+}
+
+func openRandomListenConnsForTarget(target *net.UDPAddr, count int) ([]net.PacketConn, error) {
+	if target == nil || count <= 0 {
+		return nil, nil
+	}
+	want4 := target.IP != nil && target.IP.To4() != nil
+
+	network := "udp6"
+	var lip net.IP
+	var err error
+	if want4 {
+		network = "udp4"
+		lip, err = common.GetLocalUdp4IP()
+	} else {
+		lip, err = common.GetLocalUdp6IP()
+	}
+	if err != nil || lip == nil || common.IsZeroIP(lip) || lip.IsUnspecified() {
+		return nil, errors.New("no usable local ip")
+	}
+	lip = common.NormalizeIP(lip)
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	out := make([]net.PacketConn, 0, count)
+	for i := 0; i < count; i++ {
+		uc, ee := net.ListenUDP(network, &net.UDPAddr{IP: lip, Port: 0})
+		if ee != nil {
+			continue
+		}
+		out = append(out, uc)
+		time.Sleep(time.Duration(r.Intn(4)+1) * time.Millisecond)
+	}
+	return out, nil
+}
+
+func startFallbackRandomScan(
+	ctx context.Context,
+	closed *uint32,
+	localConn net.PacketConn,
+	peerExt2, peerExt3 string,
+	delay time.Duration,
+) {
+	ip := hostOnly(peerExt2)
+	if ip == "" {
+		ip = hostOnly(peerExt3)
+	}
+	if ip == "" {
+		return
+	}
+
+	go func() {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+			}
+		}
+
+		if atomic.LoadUint32(closed) != 0 {
+			return
+		}
+
+		ports := getRandomUniquePorts(p2pConeFallbackCount, 1, 65535)
+		udpAddrs := make([]*net.UDPAddr, 0, len(ports))
+		for _, p := range ports {
+			ua, e := net.ResolveUDPAddr("udp", net.JoinHostPort(ip, strconv.Itoa(p)))
+			if e == nil && ua != nil {
+				udpAddrs = append(udpAddrs, ua)
+			}
+		}
+
+		for _, ua := range udpAddrs {
+			_, _ = localConn.WriteTo(bConnect, ua)
+		}
+
+		ticker := time.NewTicker(p2pConeFallbackTick)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if atomic.LoadUint32(closed) != 0 {
+					return
+				}
+				for _, ua := range udpAddrs {
+					_, _ = localConn.WriteTo(bConnect, ua)
+				}
+			}
+		}
+	}()
 }
