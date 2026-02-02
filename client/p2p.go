@@ -22,7 +22,7 @@ const (
 	// server exchange
 	p2pServerWaitTimeout        = 30 * time.Second
 	p2pServerReadStep           = 1 * time.Second
-	p2pServerCollectMoreTimeout = 5 * time.Second
+	p2pServerCollectMoreTimeout = 8 * time.Second
 
 	// handshake read loop
 	p2pHandshakeReadMax = 1500 * time.Millisecond
@@ -31,7 +31,7 @@ const (
 	p2pStrategyAConnCount = 256
 
 	// base send
-	p2pConeSendTick   = 800 * time.Millisecond
+	p2pConeSendTick   = 500 * time.Millisecond
 	p2pConeBurstCount = 3
 	p2pConeBurstGap   = 80 * time.Millisecond
 
@@ -49,16 +49,24 @@ const (
 	p2pSelfHardExtraListenCount = 128
 
 	// handshake budgets / throttling
-	p2pSuccMinInterval = 800 * time.Millisecond
-	p2pEndMinInterval  = 800 * time.Millisecond
+	p2pSuccMinInterval = 200 * time.Millisecond
+	p2pEndMinInterval  = 200 * time.Millisecond
 
 	p2pSuccBurstOnConnect = 4
 	p2pSuccEchoOnSuccess  = 2
-	p2pEndBurstOnSuccess  = 4
+	p2pEndBurstOnSuccess  = 6
 	p2pEndBurstOnEndAck   = 2
 
 	p2pMaxSuccPacketsPerPeer = 20
 	p2pMaxEndPacketsPerPeer  = 20
+
+	p2pSprayTick        = 200 * time.Millisecond
+	p2pSpraySuccMax     = 6
+	p2pSprayEndMax      = 6
+	p2pSpraySuccWindow  = 1600 * time.Millisecond
+	p2pSprayEndWindow   = 1600 * time.Millisecond
+	p2pSpraySeedSucc    = 2
+	p2pSpraySeedWindow  = 900 * time.Millisecond
 )
 
 var (
@@ -705,19 +713,13 @@ func waitP2PHandshakeWithSeed(parentCtx context.Context, localConn net.PacketCon
 		return bytes.Contains(pkt, bConnDataSeq)
 	}
 
-	sendBurst := func(msg []byte, a net.Addr, burst int) error {
-		if a == nil {
-			return nil
-		}
-		if burst <= 0 {
-			burst = 1
+	sendRawBurst := func(msg []byte, a net.Addr, burst int) {
+		if a == nil || burst <= 0 {
+			return
 		}
 		for i := 0; i < burst; i++ {
-			if _, e := localConn.WriteTo(msg, a); e != nil {
-				return e
-			}
+			_, _ = localConn.WriteTo(msg, a)
 		}
-		return nil
 	}
 
 	type peerState struct {
@@ -725,6 +727,10 @@ func waitP2PHandshakeWithSeed(parentCtx context.Context, localConn net.PacketCon
 		lastEndSend  time.Time
 		succSent     int
 		endSent      int
+
+		seenConnect bool
+		succSpray   bool
+		endSpray    bool
 	}
 	states := make(map[string]*peerState, 32)
 	getState := func(k string) *peerState {
@@ -736,15 +742,124 @@ func waitP2PHandshakeWithSeed(parentCtx context.Context, localConn net.PacketCon
 		return s
 	}
 
+	trySendSucc := func(st *peerState, addr net.Addr, burst int) {
+		if st == nil || addr == nil || burst <= 0 {
+			return
+		}
+		now := time.Now()
+		if st.succSent >= p2pMaxSuccPacketsPerPeer {
+			return
+		}
+		if now.Sub(st.lastSuccSend) < p2pSuccMinInterval {
+			return
+		}
+		st.lastSuccSend = now
+
+		if st.succSent+burst > p2pMaxSuccPacketsPerPeer {
+			burst = p2pMaxSuccPacketsPerPeer - st.succSent
+		}
+		if burst <= 0 {
+			return
+		}
+		st.succSent += burst
+		sendRawBurst(bSuccess, addr, burst)
+	}
+
+	trySendEnd := func(st *peerState, addr net.Addr, burst int) {
+		if st == nil || addr == nil || burst <= 0 {
+			return
+		}
+		now := time.Now()
+		if st.endSent >= p2pMaxEndPacketsPerPeer {
+			return
+		}
+		if now.Sub(st.lastEndSend) < p2pEndMinInterval {
+			return
+		}
+		st.lastEndSend = now
+
+		if st.endSent+burst > p2pMaxEndPacketsPerPeer {
+			burst = p2pMaxEndPacketsPerPeer - st.endSent
+		}
+		if burst <= 0 {
+			return
+		}
+		st.endSent += burst
+		sendRawBurst(bEnd, addr, burst)
+	}
+
+	startSpray := func(st *peerState, addr net.Addr, msg []byte, window time.Duration, tick time.Duration, maxCount int, markEnd bool) {
+		if st == nil || addr == nil || window <= 0 || tick <= 0 || maxCount <= 0 {
+			return
+		}
+		if markEnd {
+			if st.endSpray {
+				return
+			}
+			st.endSpray = true
+		} else {
+			if st.succSpray {
+				return
+			}
+			st.succSpray = true
+		}
+
+		go func(a net.Addr) {
+			deadline := time.Now().Add(window)
+			t := time.NewTicker(tick)
+			defer t.Stop()
+
+			sent := 0
+			for {
+				select {
+				case <-parentCtx.Done():
+					return
+				case <-t.C:
+					if time.Now().After(deadline) || sent >= maxCount {
+						return
+					}
+					_, _ = localConn.WriteTo(msg, a)
+					sent++
+				}
+			}
+		}(addr)
+	}
+
+	// seed: kick-start both directions
 	if seed != nil {
-		_ = sendBurst(bConnect, seed, 1)
-		_ = sendBurst(bSuccess, seed, 3)
+		sendRawBurst(bConnect, seed, 1)
+		sendRawBurst(bSuccess, seed, 3)
+
+		// short seed spray: helps “port-restricted / cone” environments where 1-3 packets are not enough
+		go func(a net.Addr) {
+			deadline := time.Now().Add(p2pSpraySeedWindow)
+			t := time.NewTicker(p2pSprayTick)
+			defer t.Stop()
+			sent := 0
+			for {
+				select {
+				case <-parentCtx.Done():
+					return
+				case <-t.C:
+					if time.Now().After(deadline) || sent >= p2pSpraySeedSucc {
+						return
+					}
+					_, _ = localConn.WriteTo(bSuccess, a)
+					sent++
+				}
+			}
+		}(seed)
 	}
 
 	if readTimeout <= 0 {
 		readTimeout = 10
 	}
 	logs.Trace("[P2P] handshake wait role=%s local=%s timeout=%ds", sendRole, localConn.LocalAddr().String(), readTimeout)
+
+	wantRole := common.WORK_P2P_PROVIDER
+	if sendRole == common.WORK_P2P_VISITOR {
+		wantRole = common.WORK_P2P_VISITOR
+	}
 
 	for {
 		select {
@@ -772,93 +887,56 @@ func waitP2PHandshakeWithSeed(parentCtx context.Context, localConn net.PacketCon
 		}
 
 		from := addr.String()
-		now := time.Now()
 		st := getState(from)
 
 		switch {
 		case bytes.Equal(pkt, bConnect):
-			// CONNECT -> SUCCESS (throttled + budget)
-			if st.succSent >= p2pMaxSuccPacketsPerPeer {
-				continue
-			}
-			if now.Sub(st.lastSuccSend) < p2pSuccMinInterval {
-				continue
-			}
-			st.lastSuccSend = now
+			// CONNECT -> SUCCESS (reply immediately + short spray window)
+			st.seenConnect = true
 
-			burst := p2pSuccBurstOnConnect
-			if st.succSent+burst > p2pMaxSuccPacketsPerPeer {
-				burst = p2pMaxSuccPacketsPerPeer - st.succSent
-			}
-			st.succSent += burst
+			logs.Trace("[P2P] recv CONNECT from=%s local=%s -> send SUCCESS burst=%d + spray", from, localConn.LocalAddr().String(), p2pSuccBurstOnConnect)
 
-			logs.Trace("[P2P] recv CONNECT from=%s local=%s -> send SUCCESS x%d", from, localConn.LocalAddr().String(), burst)
-			_ = sendBurst(bSuccess, addr, burst)
+			trySendSucc(st, addr, p2pSuccBurstOnConnect)
+			startSpray(st, addr, bSuccess, p2pSpraySuccWindow, p2pSprayTick, p2pSpraySuccMax, false)
 
 		case bytes.Equal(pkt, bSuccess):
+			// SUCCESS handling diverges by role, but BOTH SIDES now push END to avoid deadlock.
+
 			if sendRole == common.WORK_P2P_VISITOR {
-				// visitor: SUCCESS -> END (throttled + budget)
-				if st.endSent >= p2pMaxEndPacketsPerPeer {
-					continue
-				}
-				if now.Sub(st.lastEndSend) < p2pEndMinInterval {
-					continue
-				}
-				st.lastEndSend = now
+				// visitor: SUCCESS -> END (strong redundancy: burst + spray)
+				logs.Trace("[P2P] visitor recv SUCCESS from=%s local=%s -> send END burst=%d + spray",
+					from, localConn.LocalAddr().String(), p2pEndBurstOnSuccess)
 
-				burst := p2pEndBurstOnSuccess
-				if st.endSent+burst > p2pMaxEndPacketsPerPeer {
-					burst = p2pMaxEndPacketsPerPeer - st.endSent
-				}
-				st.endSent += burst
-
-				logs.Trace("[P2P] visitor recv SUCCESS from=%s local=%s -> send END x%d", from, localConn.LocalAddr().String(), burst)
-				if e := sendBurst(bEnd, addr, burst); e != nil {
-					return "", localConn.LocalAddr().String(), sendRole, e
-				}
-			} else {
-				if st.succSent >= p2pMaxSuccPacketsPerPeer {
-					continue
-				}
-				if now.Sub(st.lastSuccSend) < p2pSuccMinInterval {
-					continue
-				}
-				st.lastSuccSend = now
-
-				burst := p2pSuccEchoOnSuccess
-				if st.succSent+burst > p2pMaxSuccPacketsPerPeer {
-					burst = p2pMaxSuccPacketsPerPeer - st.succSent
-				}
-				st.succSent += burst
-
-				logs.Trace("[P2P] provider recv SUCCESS from=%s local=%s -> echo SUCCESS x%d", from, localConn.LocalAddr().String(), burst)
-				_ = sendBurst(bSuccess, addr, burst)
+				trySendEnd(st, addr, p2pEndBurstOnSuccess)
+				startSpray(st, addr, bEnd, p2pSprayEndWindow, p2pSprayTick, p2pSprayEndMax, true)
+				// visitor still waits for END to confirm both-way
+				continue
 			}
 
-		case bytes.Equal(pkt, bEnd):
-			// END: strongest evidence; ack a little (throttled), then accept
-			if st.endSent < p2pMaxEndPacketsPerPeer && now.Sub(st.lastEndSend) >= p2pEndMinInterval {
-				st.lastEndSend = now
-				burst := p2pEndBurstOnEndAck
-				if st.endSent+burst > p2pMaxEndPacketsPerPeer {
-					burst = p2pMaxEndPacketsPerPeer - st.endSent
-				}
-				if burst > 0 {
-					st.endSent += burst
-					_ = sendBurst(bEnd, addr, burst)
-				}
-			}
+			// provider:
+			logs.Trace("[P2P] provider recv SUCCESS from=%s local=%s -> echo SUCCESS=%d + push END=%d", from, localConn.LocalAddr().String(), p2pSuccEchoOnSuccess, p2pEndBurstOnSuccess)
 
-			wantRole := common.WORK_P2P_PROVIDER
-			if sendRole == common.WORK_P2P_VISITOR {
-				wantRole = common.WORK_P2P_VISITOR
-			}
+			trySendSucc(st, addr, p2pSuccEchoOnSuccess)
+			trySendEnd(st, addr, p2pEndBurstOnSuccess)
+			startSpray(st, addr, bEnd, p2pSprayEndWindow, p2pSprayTick, p2pSprayEndMax, true)
 
 			_, fixedLocal, ferr := common.FixUdpListenAddrForRemote(from, localConn.LocalAddr().String())
 			if ferr != nil {
 				return "", "", sendRole, ferr
 			}
+			logs.Debug("[P2P] handshake OK (provider-on-success) role=%s remote=%s local=%s", wantRole, from, fixedLocal)
+			return from, fixedLocal, wantRole, nil
 
+		case bytes.Equal(pkt, bEnd):
+			// END: strongest evidence. ack a little then accept.
+			logs.Trace("[P2P] recv END from=%s local=%s -> ack END=%d then accept", from, localConn.LocalAddr().String(), p2pEndBurstOnEndAck)
+
+			trySendEnd(st, addr, p2pEndBurstOnEndAck)
+
+			_, fixedLocal, ferr := common.FixUdpListenAddrForRemote(from, localConn.LocalAddr().String())
+			if ferr != nil {
+				return "", "", sendRole, ferr
+			}
 			logs.Debug("[P2P] handshake OK role=%s remote=%s local=%s", wantRole, from, fixedLocal)
 			return from, fixedLocal, wantRole, nil
 
