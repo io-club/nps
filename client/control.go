@@ -123,7 +123,7 @@ func StartFromFile(pCtx context.Context, pCancel context.CancelFunc, path string
 	cnf, err := config.NewConfig(path)
 	if err != nil || cnf.CommonConfig == nil {
 		logs.Error("Config file %s loading error %v", path, err)
-		os.Exit(0)
+		os.Exit(1)
 	}
 	logs.Info("Loading configuration file %s successfully", path)
 
