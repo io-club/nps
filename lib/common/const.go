@@ -56,6 +56,9 @@ const (
 
 	ConnectionFailBytes = "HTTP/1.1 404 Not Found\r\n" +
 		"\r\n"
+
+	IPv4DNS = "8.8.8.8:53"
+	IPv6DNS = "[2400:3200::1]:53"
 )
 
 var DefaultPort = map[string]string{

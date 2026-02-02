@@ -660,7 +660,7 @@ func GetLocalUdpAddr() (net.Conn, error) {
 }
 
 func GetLocalUdp4Addr() (net.Conn, error) {
-	tmpConn, err := net.Dial("udp4", "8.8.8.8:53")
+	tmpConn, err := net.Dial("udp4", IPv4DNS)
 	if err != nil {
 		return nil, err
 	}
@@ -668,11 +668,39 @@ func GetLocalUdp4Addr() (net.Conn, error) {
 }
 
 func GetLocalUdp6Addr() (net.Conn, error) {
-	tmpConn, err := net.Dial("udp6", "[2400:3200::1]:53")
+	tmpConn, err := net.Dial("udp6", IPv6DNS)
 	if err != nil {
 		return nil, err
 	}
 	return tmpConn, tmpConn.Close()
+}
+
+// GetLocalUdp4IP returns the preferred local IPv4 egress IP.
+func GetLocalUdp4IP() (net.IP, error) {
+	c, err := net.Dial("udp4", IPv4DNS)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+	la, ok := c.LocalAddr().(*net.UDPAddr)
+	if !ok || la == nil || la.IP == nil {
+		return nil, fmt.Errorf("get local udp4 ip failed")
+	}
+	return la.IP, nil
+}
+
+// GetLocalUdp6IP returns the preferred local IPv6 egress IP.
+func GetLocalUdp6IP() (net.IP, error) {
+	c, err := net.Dial("udp6", IPv6DNS)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+	la, ok := c.LocalAddr().(*net.UDPAddr)
+	if !ok || la == nil || la.IP == nil {
+		return nil, fmt.Errorf("get local udp6 ip failed")
+	}
+	return la.IP, nil
 }
 
 // ParseStr parse template
@@ -1448,4 +1476,54 @@ func ChooseLocalAddrForPeer(selfLocal, peerLocal string) string {
 		return selfV6
 	}
 	return selfFallback
+}
+
+// FixUdpListenAddrForRemote makes sure localAddr is a concrete address (not wildcard)
+// and matches the IP family of remoteAddr.
+// Returns (network, fixedLocalAddr).
+func FixUdpListenAddrForRemote(remoteAddr, localAddr string) (string, string, error) {
+	rip := ParseIPFromAddr(remoteAddr)
+	if rip == nil {
+		return "", "", fmt.Errorf("parse remote ip failed: %s", remoteAddr)
+	}
+	rip = NormalizeIP(rip)
+	wantV4 := rip.To4() != nil
+	network := "udp6"
+	if wantV4 {
+		network = "udp4"
+	}
+
+	port := GetPortStrByAddr(localAddr)
+	if port == "" || port == "0" {
+		return "", "", fmt.Errorf("invalid local port: %s", localAddr)
+	}
+
+	lip := ParseIPFromAddr(localAddr)
+	if lip != nil {
+		lip = NormalizeIP(lip)
+	}
+	localSpecified := lip != nil && !IsZeroIP(lip) && !lip.IsUnspecified()
+	localIsV4 := lip != nil && lip.To4() != nil
+
+	// already concrete and family matches
+	if localSpecified && (localIsV4 == wantV4) {
+		return network, localAddr, nil
+	}
+
+	var ip net.IP
+	var err error
+	if wantV4 {
+		ip, err = GetLocalUdp4IP()
+	} else {
+		ip, err = GetLocalUdp6IP()
+	}
+	if err != nil {
+		return "", "", err
+	}
+	ip = NormalizeIP(ip)
+	if ip == nil || IsZeroIP(ip) || ip.IsUnspecified() {
+		return "", "", fmt.Errorf("no usable local ip for %s", network)
+	}
+
+	return network, net.JoinHostPort(ip.String(), port), nil
 }
