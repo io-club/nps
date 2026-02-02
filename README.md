@@ -139,6 +139,10 @@ npc update && npc restart
 
 ### Stable
 
+- **v0.34.1 (2026-02-03)**
+  - 优化P2P握手逻辑
+  - 更新相关依赖包
+
 - **v0.34.0 (2026-02-02)**
   - 增强P2P打洞能力（不再兼容旧版） [#198](https://github.com/djylb/nps/pull/198) (感谢[cr4n5](https://github.com/cr4n5))
   - 避免连接过程超时断连
