@@ -413,14 +413,17 @@ func run(ctx context.Context, cancel context.CancelFunc) {
 		*serverAddr = strings.ReplaceAll(*serverAddr, "：", ":")
 		*verifyKey = strings.ReplaceAll(*verifyKey, "，", ",")
 		*connType = strings.ReplaceAll(*connType, "，", ",")
+		*localIP = strings.ReplaceAll(*localIP, "，", ",")
 
 		serverAddrs := strings.Split(*serverAddr, ",")
 		verifyKeys := strings.Split(*verifyKey, ",")
 		connTypes := strings.Split(*connType, ",")
+		localIPs := strings.Split(*localIP, ",")
 
 		serverAddrs = common.HandleArrEmptyVal(serverAddrs)
 		verifyKeys = common.HandleArrEmptyVal(verifyKeys)
 		connTypes = common.HandleArrEmptyVal(connTypes)
+		localIPs = common.HandleArrEmptyVal(localIPs)
 
 		if len(connTypes) == 0 {
 			connTypes = append(connTypes, "tcp")
@@ -431,17 +434,18 @@ func run(ctx context.Context, cancel context.CancelFunc) {
 			os.Exit(1)
 		}
 
-		maxLength := common.ExtendArrs(&serverAddrs, &verifyKeys, &connTypes)
+		maxLength := common.ExtendArrs(&serverAddrs, &verifyKeys, &connTypes, &localIPs)
 		for i := 0; i < maxLength; i++ {
 			serverAddr := serverAddrs[i]
 			verifyKey := verifyKeys[i]
 			connType := connTypes[i]
+			localIP := localIPs[i]
 			connType = strings.ToLower(connType)
 
 			go func() {
 				for {
-					logs.Info("Start server: %s vkey: %s type: %s", serverAddr, verifyKey, connType)
-					client.NewRPClient(serverAddr, verifyKey, connType, *proxyUrl, *localIP, "", nil, *disconnectTime, nil).Start(ctx)
+					logs.Info("Start server: %s vkey: %s type: %s local_ip: %s", serverAddr, verifyKey, connType, localIP)
+					client.NewRPClient(serverAddr, verifyKey, connType, *proxyUrl, localIP, "", nil, *disconnectTime, nil).Start(ctx)
 					if *autoReconnect {
 						logs.Info("Client closed! It will be reconnected in five seconds")
 						time.Sleep(time.Second * 5)

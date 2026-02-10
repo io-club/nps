@@ -146,7 +146,7 @@ conn_type=tcp
 vkey=123
 dns_server=8.8.8.8
 auto_reconnection=true
-
+#local_ip=192.168.1.100
 #max_conn=1000
 #flow_limit=1000
 #rate_limit=1000
