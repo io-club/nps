@@ -23,39 +23,41 @@ import (
 
 type HttpProxy struct {
 	*proxy.BaseServer
-	HttpServer     *HttpServer
-	HttpsServer    *HttpsServer
-	Http3Server    *Http3Server
-	HttpPort       int
-	HttpsPort      int
-	Http3Port      int
-	HttpProxyCache *index.AnyIntIndex
-	HttpOnlyPass   string
-	AddOrigin      bool
-	HttpPortStr    string
-	HttpsPortStr   string
-	Http3PortStr   string
-	Http3Bridge    bool
-	ErrorAlways    bool
-	ForceAutoSsl   bool
-	Magic          *certmagic.Config
-	Acme           *certmagic.ACMEIssuer
+	HttpServer            *HttpServer
+	HttpsServer           *HttpsServer
+	Http3Server           *Http3Server
+	HttpPort              int
+	HttpsPort             int
+	Http3Port             int
+	HttpProxyCache        *index.AnyIntIndex
+	HttpOnlyPass          string
+	AddOrigin             bool
+	HttpPortStr           string
+	HttpsPortStr          string
+	Http3PortStr          string
+	Http3Bridge           bool
+	ErrorAlways           bool
+	ForceAutoSsl          bool
+	Magic                 *certmagic.Config
+	Acme                  *certmagic.ACMEIssuer
+	ResponseHeaderTimeout time.Duration
 }
 
 func NewHttpProxy(bridge proxy.NetBridge, task *file.Tunnel, httpPort, httpsPort, http3Port int, httpOnlyPass string, addOrigin, allowLocalProxy bool, httpProxyCache *index.AnyIntIndex) *HttpProxy {
 	httpProxy := &HttpProxy{
-		BaseServer:     proxy.NewBaseServer(bridge, task, allowLocalProxy),
-		HttpPort:       httpPort,
-		HttpsPort:      httpsPort,
-		Http3Port:      http3Port,
-		HttpProxyCache: httpProxyCache,
-		HttpOnlyPass:   httpOnlyPass,
-		AddOrigin:      addOrigin,
-		HttpPortStr:    strconv.Itoa(httpPort),
-		HttpsPortStr:   strconv.Itoa(httpsPort),
-		Http3PortStr:   strconv.Itoa(http3Port),
-		Http3Bridge:    false,
-		ForceAutoSsl:   false,
+		BaseServer:            proxy.NewBaseServer(bridge, task, allowLocalProxy),
+		HttpPort:              httpPort,
+		HttpsPort:             httpsPort,
+		Http3Port:             http3Port,
+		HttpProxyCache:        httpProxyCache,
+		HttpOnlyPass:          httpOnlyPass,
+		AddOrigin:             addOrigin,
+		HttpPortStr:           strconv.Itoa(httpPort),
+		HttpsPortStr:          strconv.Itoa(httpsPort),
+		Http3PortStr:          strconv.Itoa(http3Port),
+		Http3Bridge:           false,
+		ForceAutoSsl:          false,
+		ResponseHeaderTimeout: 100,
 	}
 	return httpProxy
 }
@@ -111,6 +113,9 @@ func (s *HttpProxy) Start() error {
 		},
 	}
 	s.Acme = certmagic.NewACMEIssuer(s.Magic, certmagic.DefaultACME)
+
+	s.ResponseHeaderTimeout = time.Duration(beego.AppConfig.DefaultInt("http_proxy_response_timeout", 100)) * time.Second
+
 	// Start Server
 	if s.HttpPort > 0 {
 		httpListener, err := connection.GetHttpListener()

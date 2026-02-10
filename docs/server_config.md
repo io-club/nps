@@ -52,47 +52,48 @@ nps.exe -conf_path=D:\test\nps
 ---
 
 ## 3. 代理端口相关
-| 名称                          | 说明                                                                                      |
-|-----------------------------|-----------------------------------------------------------------------------------------|
-| `bridge_port`               | 客户端与服务端通信端口（默认 `8024`，**仅在端口复用时需要配置**）                                                  |
-| `bridge_ip`                 | 监听地址（默认 `0.0.0.0`，监听所有 IP）                                                              |
-| `bridge_type`               | 连接方式（`tcp`、`udp`、`both`，默认 `both`）（已弃用）                                                 |
-| `http_proxy_ip`             | HTTP 代理监听地址（默认 `0.0.0.0`）                                                               |
-| `http_proxy_port`           | HTTP 代理监听端口（默认 `80`，留空不启用）                                                              |
-| `https_proxy_port`          | HTTPS 代理监听端口（默认 `443`，留空不启用）                                                            |
-| `http3_proxy_port`          | HTTP/3 代理监听端口（默认 `https_proxy_port`，配置`0`关闭）                                            |
-| `force_auto_ssl`            | 强制自动申请证书，需自行解决80、443端口问题（默认 `false`）                                                    |
-| `ssl_path`                  | 自动申请证书保存路径（默认 `ssl`）                                                                    |
-| `ssl_email`                 | 自动申请证书使用的邮箱                                                                             |
-| `ssl_ca`                    | 自动申请证书使用的 CA（`LetsEncrypt`、`ZeroSSL`、`GoogleTrust`，默认 `LetsEncrypt`）                    |
-| `ssl_zerossl_api`           | ZeroSSL 的 API 密钥                                                                        |
-| `ssl_cache_max`             | 证书缓存最大个数（0 不限制）                                                                         |
-| `ssl_cache_reload`          | 证书缓存重载间隔，检测文件是否变更的时间间隔（单位：s）                                                            |
-| `ssl_cache_idle`            | 证书缓存闲置清理，从缓存移除该证书的时间间隔（单位：m）                                                            |
-| `bridge_tcp_port`           | 客户端与服务端通信 TCP 端口（默认 `8024`，留空不启用）                                                       |
-| `bridge_kcp_port`           | 客户端与服务端通信 KCP 端口（默认 `8024`，留空不启用）                                                       |
-| `bridge_tls_port`           | 客户端与服务端通信 TLS 端口（默认 `8025`，留空不启用）                                                       |
-| `bridge_quic_port`          | 客户端与服务端通信 QUIC 端口（默认 `8025`，留空不启用）                                                      |
-| `bridge_ws_port`            | 客户端与服务端通信 WS 端口（默认 `8026`，留空不启用）                                                        |
-| `bridge_wss_port`           | 客户端与服务端通信 WSS 端口（默认 `8027`，留空不启用）                                                       |
-| `bridge_tcp_ip`             | 客户端与服务端通信 TCP 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                        |
-| `bridge_kcp_ip`             | 客户端与服务端通信 KCP 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                        |
-| `bridge_quic_ip`            | 客户端与服务端通信 QUIC 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                       |
-| `bridge_tls_ip`             | 客户端与服务端通信 TLS 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                        |
-| `bridge_ws_ip`              | 客户端与服务端通信 WS 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                         |
-| `bridge_wss_ip`             | 客户端与服务端通信 WSS 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                        |
-| `bridge_path`               | 客户端与服务端通信 WS 的请求路径                                                                      |
-| `bridge_real_ip_header`     | 客户端与服务端通信 WS 获取真实IP的请求头                                                                 |
-| `bridge_trusted_ips`        | 客户端与服务端通信 WS 获取真实IP信任的代理IP列表                                                            |
-| `bridge_host`               | 客户端与服务端通信域名 （端口复用时使用）                                                                   |
-| `bridge_cert_file`          | 客户端与服务端通信 TLS 证书文件路径                                                                    |
-| `bridge_key_file`           | 客户端与服务端通信 TLS 证书密钥文件路径                                                                  |
-| `bridge_http3`              | 客户端与服务端通信允许通过 HTTP/3 端口连接                                                               |
-| `bridge_select_mode`        | 相同`vkey`客户端连接选取模式（主备：`0`/`Primary`/`p`，轮询：`1`/`RoundRobin`/`rr`，随机：`2`/`Random`/`rand`） |
-| `quic_alpn`                 | QUIC 握手时允许协商的 ALPN 列表，逗号分隔（默认 `nps`）                                                    |
-| `quic_keep_alive_period`    | QUIC 空闲保活周期（单位：s，默认 `10`）                                                               |
-| `quic_max_idle_timeout`     | QUIC 最大空闲超时时间（单位：秒，默认 `30`）                                                             |
-| `quic_max_incoming_streams` | QUIC 最大并发接收流数量（默认 `100000`）                                                             |
+| 名称                            | 说明                                                                                      |
+|-------------------------------|-----------------------------------------------------------------------------------------|
+| `bridge_port`                 | 客户端与服务端通信端口（默认 `8024`，**仅在端口复用时需要配置**）                                                  |
+| `bridge_ip`                   | 监听地址（默认 `0.0.0.0`，监听所有 IP）                                                              |
+| `bridge_type`                 | 连接方式（`tcp`、`udp`、`both`，默认 `both`）（已弃用）                                                 |
+| `http_proxy_ip`               | HTTP 代理监听地址（默认 `0.0.0.0`）                                                               |
+| `http_proxy_port`             | HTTP 代理监听端口（默认 `80`，留空不启用）                                                              |
+| `https_proxy_port`            | HTTPS 代理监听端口（默认 `443`，留空不启用）                                                            |
+| `http3_proxy_port`            | HTTP/3 代理监听端口（默认 `https_proxy_port`，配置`0`关闭）                                            |
+| `http_proxy_response_timeout` | HTTP 后端响应头超时（单位 s，默认值 100）                                                              |
+| `force_auto_ssl`              | 强制自动申请证书，需自行解决80、443端口问题（默认 `false`）                                                    |
+| `ssl_path`                    | 自动申请证书保存路径（默认 `ssl`）                                                                    |
+| `ssl_email`                   | 自动申请证书使用的邮箱                                                                             |
+| `ssl_ca`                      | 自动申请证书使用的 CA（`LetsEncrypt`、`ZeroSSL`、`GoogleTrust`，默认 `LetsEncrypt`）                    |
+| `ssl_zerossl_api`             | ZeroSSL 的 API 密钥                                                                        |
+| `ssl_cache_max`               | 证书缓存最大个数（0 不限制）                                                                         |
+| `ssl_cache_reload`            | 证书缓存重载间隔，检测文件是否变更的时间间隔（单位：s）                                                            |
+| `ssl_cache_idle`              | 证书缓存闲置清理，从缓存移除该证书的时间间隔（单位：m）                                                            |
+| `bridge_tcp_port`             | 客户端与服务端通信 TCP 端口（默认 `8024`，留空不启用）                                                       |
+| `bridge_kcp_port`             | 客户端与服务端通信 KCP 端口（默认 `8024`，留空不启用）                                                       |
+| `bridge_tls_port`             | 客户端与服务端通信 TLS 端口（默认 `8025`，留空不启用）                                                       |
+| `bridge_quic_port`            | 客户端与服务端通信 QUIC 端口（默认 `8025`，留空不启用）                                                      |
+| `bridge_ws_port`              | 客户端与服务端通信 WS 端口（默认 `8026`，留空不启用）                                                        |
+| `bridge_wss_port`             | 客户端与服务端通信 WSS 端口（默认 `8027`，留空不启用）                                                       |
+| `bridge_tcp_ip`               | 客户端与服务端通信 TCP 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                        |
+| `bridge_kcp_ip`               | 客户端与服务端通信 KCP 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                        |
+| `bridge_quic_ip`              | 客户端与服务端通信 QUIC 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                       |
+| `bridge_tls_ip`               | 客户端与服务端通信 TLS 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                        |
+| `bridge_ws_ip`                | 客户端与服务端通信 WS 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                         |
+| `bridge_wss_ip`               | 客户端与服务端通信 WSS 监听IP（可选，只有和 `bridge_ip` 不一样时才需要配置）                                        |
+| `bridge_path`                 | 客户端与服务端通信 WS 的请求路径                                                                      |
+| `bridge_real_ip_header`       | 客户端与服务端通信 WS 获取真实IP的请求头                                                                 |
+| `bridge_trusted_ips`          | 客户端与服务端通信 WS 获取真实IP信任的代理IP列表                                                            |
+| `bridge_host`                 | 客户端与服务端通信域名 （端口复用时使用）                                                                   |
+| `bridge_cert_file`            | 客户端与服务端通信 TLS 证书文件路径                                                                    |
+| `bridge_key_file`             | 客户端与服务端通信 TLS 证书密钥文件路径                                                                  |
+| `bridge_http3`                | 客户端与服务端通信允许通过 HTTP/3 端口连接                                                               |
+| `bridge_select_mode`          | 相同`vkey`客户端连接选取模式（主备：`0`/`Primary`/`p`，轮询：`1`/`RoundRobin`/`rr`，随机：`2`/`Random`/`rand`） |
+| `quic_alpn`                   | QUIC 握手时允许协商的 ALPN 列表，逗号分隔（默认 `nps`）                                                    |
+| `quic_keep_alive_period`      | QUIC 空闲保活周期（单位：s，默认 `10`）                                                               |
+| `quic_max_idle_timeout`       | QUIC 最大空闲超时时间（单位：秒，默认 `30`）                                                             |
+| `quic_max_incoming_streams`   | QUIC 最大并发接收流数量（默认 `100000`）                                                             |
 
 
 ---

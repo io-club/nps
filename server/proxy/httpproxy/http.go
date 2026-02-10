@@ -182,7 +182,7 @@ func (s *HttpServer) handleProxy(w http.ResponseWriter, r *http.Request) {
 		tr = v.(*http.Transport)
 	} else {
 		tr = &http.Transport{
-			ResponseHeaderTimeout: 60 * time.Second,
+			ResponseHeaderTimeout: s.ResponseHeaderTimeout,
 			DisableKeepAlives:     host.CompatMode,
 			DialContext:           s.DialContext,
 			DialTLSContext:        s.DialTlsContext,
