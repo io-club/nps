@@ -23,6 +23,7 @@ type TRPClient struct {
 	svrAddr        string
 	bridgeConnType string
 	proxyUrl       string
+	localIP        string
 	vKey           string
 	uuid           string
 	tunnel         any
@@ -38,12 +39,13 @@ type TRPClient struct {
 }
 
 // NewRPClient new client
-func NewRPClient(svrAddr, vKey, bridgeConnType, proxyUrl, uuid string, cnf *config.Config, disconnectTime int, fsm *FileServerManager) *TRPClient {
+func NewRPClient(svrAddr, vKey, bridgeConnType, proxyUrl, localIP, uuid string, cnf *config.Config, disconnectTime int, fsm *FileServerManager) *TRPClient {
 	return &TRPClient{
 		svrAddr:        svrAddr,
 		vKey:           vKey,
 		bridgeConnType: bridgeConnType,
 		proxyUrl:       proxyUrl,
+		localIP:        localIP,
 		uuid:           uuid,
 		cnf:            cnf,
 		disconnectTime: disconnectTime,
@@ -60,7 +62,7 @@ func (s *TRPClient) Start(ctx context.Context) {
 	defer s.Close()
 	NowStatus = 0
 	if Ver < 5 {
-		c, uuid, err := NewConn(s.bridgeConnType, s.vKey, s.svrAddr, s.proxyUrl)
+		c, uuid, err := NewConn(s.bridgeConnType, s.vKey, s.svrAddr, s.proxyUrl, s.localIP)
 		if err != nil {
 			HasFailed = true
 			logs.Error("The connection server failed and will be reconnected in five seconds, error %v", err)
@@ -319,7 +321,7 @@ func (s *TRPClient) newUdpConn(localAddr, rAddr string, md5Password string) {
 
 // mux tunnel
 func (s *TRPClient) newChan() {
-	tunnel, uuid, err := NewConn(s.bridgeConnType, s.vKey, s.svrAddr, s.proxyUrl)
+	tunnel, uuid, err := NewConn(s.bridgeConnType, s.vKey, s.svrAddr, s.proxyUrl, s.localIP)
 	if err != nil {
 		logs.Error("Failed to connect to server %s error: %v", s.svrAddr, err)
 		HasFailed = true

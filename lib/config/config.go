@@ -17,6 +17,7 @@ type CommonConfig struct {
 	AutoReconnection bool
 	TlsEnable        bool
 	ProxyUrl         string
+	LocalIP          string
 	DnsServer        string
 	NtpServer        string
 	NtpInterval      int
@@ -155,6 +156,8 @@ func dealCommon(s string) *CommonConfig {
 			c.Client.Cnf.Crypt = common.GetBoolByStr(item[1])
 		case "proxy_url":
 			c.ProxyUrl = item[1]
+		case "local_ip":
+			c.LocalIP = item[1]
 		case "dns_server":
 			c.DnsServer = item[1]
 		case "ntp_server":

@@ -1527,3 +1527,19 @@ func FixUdpListenAddrForRemote(remoteAddr, localAddr string) (string, string, er
 
 	return network, net.JoinHostPort(ip.String(), port), nil
 }
+
+func BuildTCPBindAddr(localIP string) net.Addr {
+	ip := net.ParseIP(strings.TrimSpace(localIP))
+	if ip == nil {
+		return nil
+	}
+	return &net.TCPAddr{IP: ip}
+}
+
+func BuildUDPBindAddr(localIP string) *net.UDPAddr {
+	ip := net.ParseIP(strings.TrimSpace(localIP))
+	if ip == nil {
+		return nil
+	}
+	return &net.UDPAddr{IP: ip}
+}

@@ -38,6 +38,7 @@ var (
 	connType       = flag.StringP("type", "t", "tcp", "Connection type with the server (tcp|tls|kcp|quic|ws|wss) (eg: tcp,tls)")
 	configPath     = flag.StringP("config", "c", "", "Configuration file path (path1,path2)")
 	proxyUrl       = flag.String("proxy", "", "Proxy socks5 URL (eg: socks5://user:pass@127.0.0.1:9007)")
+	localIP        = flag.String("local_ip", "", "Local source IP for outbound connections")
 	localType      = flag.String("local_type", "p2p", "P2P target type")
 	localPort      = flag.Int("local_port", 2000, "P2P local port")
 	password       = flag.String("password", "", "P2P password flag")
@@ -195,10 +196,10 @@ func main() {
 	// 处理服务命令
 	switch cmd {
 	case "status":
-		client.GetTaskStatus(*serverAddr, *verifyKey, *connType, *proxyUrl)
+		client.GetTaskStatus(*serverAddr, *verifyKey, *connType, *proxyUrl, *localIP)
 		return
 	case "register":
-		client.RegisterLocalIp(*serverAddr, *verifyKey, *connType, *proxyUrl, *registerTime)
+		client.RegisterLocalIp(*serverAddr, *verifyKey, *connType, *proxyUrl, *localIP, *registerTime)
 		return
 	case "update":
 		install.UpdateNpc()
@@ -375,6 +376,7 @@ func run(ctx context.Context, cancel context.CancelFunc) {
 		commonConfig.Server = *serverAddr
 		commonConfig.VKey = *verifyKey
 		commonConfig.Tp = strings.ToLower(*connType)
+		commonConfig.LocalIP = strings.TrimSpace(*localIP)
 		localServer := new(config.LocalServer)
 		localServer.Type = strings.ToLower(*localType)
 		localServer.Password = *password
@@ -399,6 +401,9 @@ func run(ctx context.Context, cancel context.CancelFunc) {
 	}
 	if *configPath == "" {
 		*configPath, _ = env["NPC_CONFIG_PATH"]
+	}
+	if *localIP == "" {
+		*localIP, _ = env["NPC_LOCAL_IP"]
 	}
 	hasCommand := *verifyKey != "" && *serverAddr != ""
 	if hasCommand {
@@ -436,7 +441,7 @@ func run(ctx context.Context, cancel context.CancelFunc) {
 			go func() {
 				for {
 					logs.Info("Start server: %s vkey: %s type: %s", serverAddr, verifyKey, connType)
-					client.NewRPClient(serverAddr, verifyKey, connType, *proxyUrl, "", nil, *disconnectTime, nil).Start(ctx)
+					client.NewRPClient(serverAddr, verifyKey, connType, *proxyUrl, *localIP, "", nil, *disconnectTime, nil).Start(ctx)
 					if *autoReconnect {
 						logs.Info("Client closed! It will be reconnected in five seconds")
 						time.Sleep(time.Second * 5)

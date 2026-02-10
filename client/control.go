@@ -56,8 +56,8 @@ func init() {
 	crypt.InitTls(tls.Certificate{})
 }
 
-func GetTaskStatus(server string, vKey string, tp string, proxyUrl string) {
-	c, uuid, err := NewConn(tp, vKey, server, proxyUrl)
+func GetTaskStatus(server string, vKey string, tp string, proxyUrl string, localIP string) {
+	c, uuid, err := NewConn(tp, vKey, server, proxyUrl, localIP)
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
@@ -100,8 +100,8 @@ func GetTaskStatus(server string, vKey string, tp string, proxyUrl string) {
 	os.Exit(0)
 }
 
-func RegisterLocalIp(server string, vKey string, tp string, proxyUrl string, hour int) {
-	c, uuid, err := NewConn(tp, vKey, server, proxyUrl)
+func RegisterLocalIp(server string, vKey string, tp string, proxyUrl string, localIP string, hour int) {
+	c, uuid, err := NewConn(tp, vKey, server, proxyUrl, localIP)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -170,7 +170,7 @@ func StartFromFile(pCtx context.Context, pCancel context.CancelFunc, path string
 			return
 		}
 
-		c, cid, err := NewConn(cnf.CommonConfig.Tp, cnf.CommonConfig.VKey, cnf.CommonConfig.Server, cnf.CommonConfig.ProxyUrl)
+		c, cid, err := NewConn(cnf.CommonConfig.Tp, cnf.CommonConfig.VKey, cnf.CommonConfig.Server, cnf.CommonConfig.ProxyUrl, cnf.CommonConfig.LocalIP)
 		if err != nil {
 			logs.Error("Failed to connect: %v", err)
 			continue
@@ -255,7 +255,7 @@ func StartFromFile(pCtx context.Context, pCancel context.CancelFunc, path string
 			logs.Info("web access login username:%s password:%s", cnf.CommonConfig.Client.WebUserName, cnf.CommonConfig.Client.WebPassword)
 		}
 
-		NewRPClient(cnf.CommonConfig.Server, vkey, cnf.CommonConfig.Tp, cnf.CommonConfig.ProxyUrl, uuid, cnf, cnf.CommonConfig.DisconnectTime, fsm).Start(ctx)
+		NewRPClient(cnf.CommonConfig.Server, vkey, cnf.CommonConfig.Tp, cnf.CommonConfig.ProxyUrl, cnf.CommonConfig.LocalIP, uuid, cnf, cnf.CommonConfig.DisconnectTime, fsm).Start(ctx)
 		fsm.CloseAll()
 		cancel()
 	}
@@ -312,7 +312,7 @@ func EnsurePort(server string, tp string) string {
 }
 
 // NewConn Create a new connection with the server and verify it
-func NewConn(tp string, vkey string, server string, proxyUrl string) (*conn.Conn, string, error) {
+func NewConn(tp string, vkey string, server string, proxyUrl string, localIP string) (*conn.Conn, string, error) {
 	//logs.Debug("NewConn: %s %s %s %s %s", tp, vkey, server, connType, proxyUrl)
 	var err error
 	var connection net.Conn
@@ -344,14 +344,14 @@ func NewConn(tp string, vkey string, server string, proxyUrl string) (*conn.Conn
 
 	switch tp {
 	case "tcp":
-		connection, err = GetProxyConn(proxyUrl, server, timeout)
+		connection, err = GetProxyConn(proxyUrl, server, timeout, localIP)
 	case "tls":
 		isTls = true
 		conf := &tls.Config{
 			InsecureSkipVerify: true,
 			ServerName:         sni,
 		}
-		rawConn, err := GetProxyConn(proxyUrl, server, timeout)
+		rawConn, err := GetProxyConn(proxyUrl, server, timeout, localIP)
 		if err != nil {
 			return nil, "", err
 		}
@@ -362,7 +362,7 @@ func NewConn(tp string, vkey string, server string, proxyUrl string) (*conn.Conn
 		}
 		tlsFp, tlsVerify = VerifyTLS(connection, sni)
 	case "ws":
-		rawConn, err := GetProxyConn(proxyUrl, server, timeout)
+		rawConn, err := GetProxyConn(proxyUrl, server, timeout, localIP)
 		if err != nil {
 			return nil, "", err
 		}
@@ -378,7 +378,7 @@ func NewConn(tp string, vkey string, server string, proxyUrl string) (*conn.Conn
 		isTls = true
 		urlStr := "wss://" + server + path
 		//logs.Debug("URL: %s Host: %s SNI: %s", urlStr, host, sni)
-		rawConn, err := GetProxyConn(proxyUrl, server, timeout)
+		rawConn, err := GetProxyConn(proxyUrl, server, timeout, localIP)
 		if err != nil {
 			return nil, "", err
 		}
@@ -399,7 +399,7 @@ func NewConn(tp string, vkey string, server string, proxyUrl string) (*conn.Conn
 			NextProtos:         []string{alpn},
 		}
 		ctx := context.Background()
-		sess, err := quic.DialAddr(ctx, server, tlsCfg, QuicConfig)
+		sess, err := dialQuicWithLocalIP(ctx, server, tlsCfg, QuicConfig, localIP)
 		if err != nil {
 			return nil, "", fmt.Errorf("quic dial error: %w", err)
 		}
@@ -412,7 +412,7 @@ func NewConn(tp string, vkey string, server string, proxyUrl string) (*conn.Conn
 		}
 		connection = conn.NewQuicAutoCloseConn(stream, sess)
 	default:
-		sess, err = kcp.DialWithOptions(server, nil, 10, 3)
+		sess, err = dialKCPWithLocalIP(server, localIP)
 		if err == nil {
 			conn.SetUdpSession(sess)
 			connection = sess
@@ -626,7 +626,7 @@ func SendType(c *conn.Conn, connType, uuid string) error {
 	return nil
 }
 
-func GetProxyConn(proxyUrl, server string, timeout time.Duration) (rawConn net.Conn, err error) {
+func GetProxyConn(proxyUrl, server string, timeout time.Duration, localIP string) (rawConn net.Conn, err error) {
 	if proxyUrl != "" {
 		u, er := url.Parse(proxyUrl)
 		if er != nil {
@@ -634,17 +634,17 @@ func GetProxyConn(proxyUrl, server string, timeout time.Duration) (rawConn net.C
 		}
 		switch u.Scheme {
 		case "socks5":
-			dialer := &net.Dialer{Timeout: timeout}
+			dialer := &net.Dialer{Timeout: timeout, LocalAddr: common.BuildTCPBindAddr(localIP)}
 			n, er := proxy.FromURL(u, dialer)
 			if er != nil {
 				return nil, er
 			}
 			rawConn, err = n.Dial("tcp", server)
 		default:
-			rawConn, err = NewHttpProxyConn(u, server, timeout)
+			rawConn, err = NewHttpProxyConn(u, server, timeout, localIP)
 		}
 	} else {
-		dialer := &net.Dialer{Timeout: timeout}
+		dialer := &net.Dialer{Timeout: timeout, LocalAddr: common.BuildTCPBindAddr(localIP)}
 		n := proxy.FromEnvironmentUsing(dialer)
 		rawConn, err = n.Dial("tcp", server)
 	}
@@ -655,8 +655,10 @@ func GetProxyConn(proxyUrl, server string, timeout time.Duration) (rawConn net.C
 }
 
 // NewHttpProxyConn http proxy connection
-func NewHttpProxyConn(proxyURL *url.URL, remoteAddr string, timeout time.Duration) (net.Conn, error) {
-	proxyConn, err := net.DialTimeout("tcp", proxyURL.Host, timeout)
+func NewHttpProxyConn(proxyURL *url.URL, remoteAddr string, timeout time.Duration, localIP string) (net.Conn, error) {
+	//proxyConn, err := net.DialTimeout("tcp", proxyURL.Host, timeout)
+	dialer := &net.Dialer{Timeout: timeout, LocalAddr: common.BuildTCPBindAddr(localIP)}
+	proxyConn, err := dialer.Dial("tcp", proxyURL.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -686,6 +688,44 @@ func NewHttpProxyConn(proxyURL *url.URL, remoteAddr string, timeout time.Duratio
 		return nil, errors.New("proxy CONNECT failed: " + resp.Status)
 	}
 	return proxyConn, nil
+}
+
+func dialQuicWithLocalIP(ctx context.Context, server string, tlsCfg *tls.Config, quicCfg *quic.Config, localIP string) (*quic.Conn, error) {
+	bindAddr := common.BuildUDPBindAddr(localIP)
+	if bindAddr == nil {
+		return quic.DialAddr(ctx, server, tlsCfg, quicCfg)
+	}
+	rAddr, err := net.ResolveUDPAddr("udp", server)
+	if err != nil {
+		return nil, err
+	}
+	packetConn, err := net.ListenUDP("udp", bindAddr)
+	if err != nil {
+		return nil, err
+	}
+	sess, err := quic.Dial(ctx, packetConn, rAddr, tlsCfg, quicCfg)
+	if err != nil {
+		_ = packetConn.Close()
+		return nil, err
+	}
+	return sess, nil
+}
+
+func dialKCPWithLocalIP(server, localIP string) (*kcp.UDPSession, error) {
+	bindAddr := common.BuildUDPBindAddr(localIP)
+	if bindAddr == nil {
+		return kcp.DialWithOptions(server, nil, 10, 3)
+	}
+	packetConn, err := net.ListenUDP("udp", bindAddr)
+	if err != nil {
+		return nil, err
+	}
+	sess, err := kcp.NewConn(server, nil, 10, 3, packetConn)
+	if err != nil {
+		_ = packetConn.Close()
+		return nil, err
+	}
+	return sess, nil
 }
 
 // get a basic auth string

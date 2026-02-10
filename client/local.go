@@ -393,7 +393,7 @@ func (mgr *P2PManager) getSecretConn() (c net.Conn, err error) {
 		}
 	}
 	if secretConn == nil {
-		pc, uuid, err := NewConn(mgr.cfg.Tp, mgr.cfg.VKey, mgr.cfg.Server, mgr.cfg.ProxyUrl)
+		pc, uuid, err := NewConn(mgr.cfg.Tp, mgr.cfg.VKey, mgr.cfg.Server, mgr.cfg.ProxyUrl, mgr.cfg.LocalIP)
 		if err != nil {
 			logs.Error("secret NewConn failed: %v", err)
 			return nil, err
@@ -606,7 +606,7 @@ func (mgr *P2PManager) newUdpConn(localAddr string, cfg *config.CommonConfig, l 
 	}
 	if secretConn == nil {
 		var uuid string
-		c, uuid, err = NewConn(cfg.Tp, cfg.VKey, cfg.Server, cfg.ProxyUrl)
+		c, uuid, err = NewConn(cfg.Tp, cfg.VKey, cfg.Server, cfg.ProxyUrl, cfg.LocalIP)
 		if err != nil {
 			logs.Error("Failed to connect to server: %v", err)
 			if AutoReconnect {
