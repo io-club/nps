@@ -140,7 +140,7 @@ npc update && npc restart
 ### Stable
 
 - **v0.34.3 (2026-02-11)**
-  - 指定出口IP对转发隧道生效 `-local_ip_forward`
+  - 添加`local_ip`对转发隧道生效开关 `-local_ip_forward`
 
 - **v0.34.2 (2026-02-10)**
   - 支持HTTP响应头超时配置 `http_proxy_response_timeout`
