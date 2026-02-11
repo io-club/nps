@@ -38,6 +38,7 @@ var SkipTLSVerify = false
 var DisableP2P = false
 var AutoReconnect = true
 var P2PMode = common.CONN_QUIC
+var LocalIPForward = false
 
 var TlsCfg = &tls.Config{
 	InsecureSkipVerify: true,

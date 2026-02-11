@@ -84,6 +84,7 @@ proxy_url=socks5://111:222@127.0.0.1:8024
 | `-config`             | 指定配置文件路径                                                              | 无         |
 | `-proxy`              | 通过代理连接 NPS（支持 Socks5 / HTTP）                                          | 无         |
 | `-local_ip`           | 指定客户端出站绑定的本地 IP（可逗号分隔，和 `-server` 一一对应）                               | 无         |
+| `-local_ip_forward`   | 是否让 `local_ip` 同时作用于隧道转发出口（仅对公网 IP 与域名生效，私网 IP 忽略）                    | `false`   |
 | `-debug`              | 是否启用调试模式                                                              | `true`    |
 | `-log`                | 日志输出模式（`stdout` / `file` / `both` / `off`）                            | `file`    |
 | `-log_path`           | NPC 日志路径（为空使用默认路径，`off` 禁用日志）                                         | `npc.log` |

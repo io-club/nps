@@ -78,7 +78,7 @@ func IsTempOrTimeout(err error) bool {
 	}
 }
 
-func HandleUdp5(ctx context.Context, serverConn net.Conn, timeout time.Duration) {
+func HandleUdp5(ctx context.Context, serverConn net.Conn, timeout time.Duration, localIP string) {
 	// Wrap the TCP tunnel with timeout and framed I/O.
 	defer serverConn.Close()
 	timeoutConn := NewTimeoutConn(serverConn, timeout)
@@ -87,7 +87,7 @@ func HandleUdp5(ctx context.Context, serverConn net.Conn, timeout time.Duration)
 
 	// Bind one local UDP socket for all outbound UDP traffic.
 	// Using nil lets the kernel pick family/port.
-	local, err := net.ListenUDP("udp", nil)
+	local, err := net.ListenUDP("udp", common.BuildUDPBindAddr(localIP))
 	if err != nil {
 		logs.Error("bind local udp port error %v", err)
 		return

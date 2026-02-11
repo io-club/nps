@@ -1543,3 +1543,14 @@ func BuildUDPBindAddr(localIP string) *net.UDPAddr {
 	}
 	return &net.UDPAddr{IP: ip}
 }
+
+func IsPublicHost(addr string) bool {
+	host := GetIpByAddr(addr)
+	if host == "" {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return IsPublicIPStrict(ip)
+	}
+	return true
+}

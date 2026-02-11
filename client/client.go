@@ -409,7 +409,11 @@ func (s *TRPClient) handleChan(src net.Conn) {
 	//socks5 udp
 	if lk.ConnType == "udp5" {
 		logs.Trace("new %s connection of udp5, remote address:%s", lk.ConnType, lk.RemoteAddr)
-		conn.HandleUdp5(s.ctx, src, lk.Option.Timeout)
+		if LocalIPForward {
+			conn.HandleUdp5(s.ctx, src, lk.Option.Timeout, s.localIP)
+		} else {
+			conn.HandleUdp5(s.ctx, src, lk.Option.Timeout, "")
+		}
 		return
 	}
 	//file mode
@@ -434,7 +438,19 @@ func (s *TRPClient) handleChan(src net.Conn) {
 	}
 	lk.Host = common.FormatAddress(lk.Host)
 	//connect to target if conn type is tcp or udp
-	if targetConn, err := net.DialTimeout(lk.ConnType, lk.Host, lk.Option.Timeout); err != nil {
+	var targetConn net.Conn
+	if LocalIPForward && s.localIP != "" && common.IsPublicHost(lk.Host) {
+		dialer := net.Dialer{Timeout: lk.Option.Timeout}
+		if lk.ConnType == "udp" {
+			dialer.LocalAddr = common.BuildUDPBindAddr(s.localIP)
+		} else {
+			dialer.LocalAddr = common.BuildTCPBindAddr(s.localIP)
+		}
+		targetConn, err = dialer.DialContext(s.ctx, lk.ConnType, lk.Host)
+	} else {
+		targetConn, err = net.DialTimeout(lk.ConnType, lk.Host, lk.Option.Timeout)
+	}
+	if err != nil {
 		logs.Warn("connect to %s error %v", lk.Host, err)
 		_ = src.Close()
 	} else {

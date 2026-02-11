@@ -871,7 +871,7 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 	if link.LocalProxy || clientId < 0 {
 		if link.ConnType == "udp5" {
 			serverSide, handlerSide := net.Pipe()
-			go conn.HandleUdp5(context.Background(), handlerSide, link.Option.Timeout)
+			go conn.HandleUdp5(context.Background(), handlerSide, link.Option.Timeout, "")
 			return serverSide, nil
 		}
 		raw := strings.TrimSpace(link.Host)

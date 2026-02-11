@@ -39,6 +39,7 @@ var (
 	configPath     = flag.StringP("config", "c", "", "Configuration file path (path1,path2)")
 	proxyUrl       = flag.String("proxy", "", "Proxy socks5 URL (eg: socks5://user:pass@127.0.0.1:9007)")
 	localIP        = flag.String("local_ip", "", "Local source IP for outbound connections")
+	localIPForward = flag.Bool("local_ip_forward", false, "Apply local_ip to tunnel forwarding egress for public IP/domain targets")
 	localType      = flag.String("local_type", "p2p", "P2P target type")
 	localPort      = flag.Int("local_port", 2000, "P2P local port")
 	password       = flag.String("password", "", "P2P password flag")
@@ -111,6 +112,7 @@ func main() {
 	client.SkipTLSVerify = *skipVerify
 	client.DisableP2P = *disableP2P
 	client.AutoReconnect = *autoReconnect
+	client.LocalIPForward = *localIPForward
 	crypt.SkipVerify = *skipVerify
 	if *protoVer < 2 {
 		crypt.SkipVerify = true
