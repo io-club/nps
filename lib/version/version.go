@@ -2,7 +2,7 @@ package version
 
 import "fmt"
 
-const VERSION = "0.34.3"
+const VERSION = "0.34.4"
 const MinVer = 7
 
 var MinVersions = []string{

@@ -1306,6 +1306,10 @@
 			<zh-CN>解封成功</zh-CN>
 			<en-US>Unban Success</en-US>
 		</lang>
+		<lang id="cleansuccess">
+			<zh-CN>清理成功</zh-CN>
+			<en-US>Clean Success</en-US>
+		</lang>
 		<lang id="recordnotfound">
 			<zh-CN>记录未找到</zh-CN>
 			<en-US>Record Not Found</en-US>

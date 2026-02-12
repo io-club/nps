@@ -98,3 +98,14 @@ func (s *GlobalController) UnbanAll() {
 	RemoveAllLoginBan()
 	s.AjaxOk("all records cleared")
 }
+
+// BanClean 强制清理失效条目
+func (s *GlobalController) BanClean() {
+	isAdmin, ok := s.GetSession("isAdmin").(bool)
+	if !ok || !isAdmin {
+		return
+	}
+
+	CleanBanRecord(true)
+	s.AjaxOk("clean success")
+}

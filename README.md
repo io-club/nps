@@ -139,6 +139,11 @@ npc update && npc restart
 
 ### Stable
 
+- **v0.34.4 (2026-02-12)**
+  - 添加登录限制配置参数，支持网页管理登录封禁 [#209](https://github.com/djylb/nps/pull/209) (感谢[Yourdaylight](https://github.com/Yourdaylight))
+  - 添加强制刷新封禁列表按钮
+  - 调整页面显示
+
 - **v0.34.3 (2026-02-11)**
   - 添加`local_ip`对转发隧道生效开关 `-local_ip_forward`
 

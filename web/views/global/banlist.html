@@ -22,6 +22,10 @@
                                     <i class="fa fa-fw fa-lg fa-eraser"></i>
                                     <span langtag="word-unbanall"></span>
                                 </a>
+                                <a class="btn btn-primary dim ml-2" onclick="cleanList()">
+                                    <i class="fa fa-fw fa-lg fa-sync"></i>
+                                    <span langtag="word-refresh"></span>
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -132,6 +136,22 @@
         $.ajax({
             type: "POST",
             url: "{{.web_base_url}}/global/unbanall",
+            success: function (res) {
+                if (res.status) {
+                    showMsg(langreply(res.msg), 'success', 1000, function () {
+                        $('#table').bootstrapTable('refresh');
+                    });
+                } else {
+                    showMsg(langreply(res.msg), 'error', 5000);
+                }
+            }
+        });
+    }
+
+    function cleanList() {
+        $.ajax({
+            type: "POST",
+            url: "{{.web_base_url}}/global/banclean",
             success: function (res) {
                 if (res.status) {
                     showMsg(langreply(res.msg), 'success', 1000, function () {

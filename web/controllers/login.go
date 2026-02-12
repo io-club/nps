@@ -210,7 +210,7 @@ func (s *LoginController) Verify() {
 }
 
 func (s *LoginController) doLogin(username, password, totp string, explicit bool) bool {
-	clearIpRecord()
+	CleanBanRecord(false)
 
 	ip, _, _ := net.SplitHostPort(s.Ctx.Request.RemoteAddr)
 	httpOnlyPass := beego.AppConfig.String("x_nps_http_only")
@@ -468,8 +468,8 @@ func RemoveAllLoginBan() {
 	})
 }
 
-func clearIpRecord() {
-	if rand.Intn(100) != 1 {
+func CleanBanRecord(force bool) {
+	if rand.Intn(100) != 1 && !force {
 		return
 	}
 
