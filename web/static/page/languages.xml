@@ -1307,8 +1307,8 @@
 			<en-US>Unban Success</en-US>
 		</lang>
 		<lang id="operationsuccess">
-		    <zh-CN>操作成功</zh-CN>
-		    <en-US>Operation Success</en-US>
+			<zh-CN>操作成功</zh-CN>
+			<en-US>Operation Success</en-US>
 		</lang>
 		<lang id="recordnotfound">
 			<zh-CN>记录未找到</zh-CN>
