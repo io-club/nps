@@ -21,12 +21,12 @@ type LoginController struct {
 	beego.Controller
 }
 
-const BanTime int64 = 5
-const IpBanTime int64 = 180
-const UserBanTime int64 = 3600
-const MaxFailTimes int = 10
-const MaxLoginBody = 1024
-const MaxSkew int64 = 5 * 60 * 1000
+var BanTime int64 = 5
+var IpBanTime int64 = 180
+var UserBanTime int64 = 3600
+var MaxFailTimes int = 10
+var MaxLoginBody int64 = 1024
+var MaxSkew int64 = 5 * 60 * 1000
 
 var loginRecord sync.Map
 var cpt *captcha.Captcha
@@ -35,14 +35,34 @@ var secureMode bool
 var forcePow bool
 
 type record struct {
+	mu                sync.Mutex
 	hasLoginFailTimes int
 	lastLoginTime     time.Time
+}
+
+// BanRecord 封禁记录，用于展示给管理员
+type BanRecord struct {
+	Key           string `json:"key"`
+	FailTimes     int    `json:"fail_times"`
+	LastLoginTime string `json:"last_login_time"`
+	IsBanned      bool   `json:"is_banned"`
+	BanType       string `json:"ban_type"`
 }
 
 func InitLogin() {
 	secureMode = beego.AppConfig.DefaultBool("secure_mode", false)
 	forcePow = beego.AppConfig.DefaultBool("force_pow", false)
 	powBits = beego.AppConfig.DefaultInt("pow_bits", 20)
+
+	BanTime = beego.AppConfig.DefaultInt64("login_ban_time", 5)
+	IpBanTime = beego.AppConfig.DefaultInt64("login_ip_ban_time", 180)
+	UserBanTime = beego.AppConfig.DefaultInt64("login_user_ban_time", 3600)
+	MaxFailTimes = beego.AppConfig.DefaultInt("login_max_fail_times", 10)
+	MaxLoginBody = beego.AppConfig.DefaultInt64("login_max_body", 1024)
+	MaxSkew = beego.AppConfig.DefaultInt64("login_max_skew", 5*60*1000)
+
+	rand.Seed(time.Now().UnixNano())
+
 	// use beego cache system store the captcha data
 	store := cache.NewMemoryCache()
 	cpt = captcha.NewWithFilter(beego.AppConfig.String("web_base_url")+"/captcha/", store)
@@ -80,11 +100,14 @@ func (s *LoginController) Verify() {
 		s.CustomAbort(413, "Payload too large")
 		return
 	}
+
 	nonce := crypt.GetRandomString(16)
 	stored := s.GetSession("login_nonce")
 	s.SetSession("login_nonce", nonce)
+
 	username := s.GetString("username")
 	ip, _, _ := net.SplitHostPort(s.Ctx.Request.RemoteAddr)
+
 	httpOnlyPass := beego.AppConfig.String("x_nps_http_only")
 	if (beego.AppConfig.DefaultBool("allow_x_real_ip", false) && common.IsTrustedProxy(beego.AppConfig.DefaultString("trusted_proxy_ips", "127.0.0.1"), ip)) ||
 		(httpOnlyPass != "" && s.Ctx.Request.Header.Get("X-NPS-Http-Only") == httpOnlyPass) {
@@ -92,8 +115,10 @@ func (s *LoginController) Verify() {
 			ip = realIP
 		}
 	}
+
 	isIpBan := IsLoginBan(ip, IpBanTime)
 	isUserBan := IsLoginBan(username, UserBanTime)
+
 	totpCode := ""
 	captchaOpen, _ := beego.AppConfig.Bool("open_captcha")
 	cptVerify := true
@@ -115,6 +140,7 @@ func (s *LoginController) Verify() {
 			return
 		}
 	}
+
 	plRaw := s.GetString("password")
 	if ((isUserBan && secureMode) || forcePow || (totpCode != "" && !cptVerify) || isIpBan) && powBits > 0 {
 		powX := s.GetString("powx")
@@ -131,6 +157,7 @@ func (s *LoginController) Verify() {
 			return
 		}
 	}
+
 	pl, err := crypt.ParseLoginPayload(plRaw)
 	if err != nil {
 		logs.Warn("Decrypt error for user %s from %s: %v", username, ip, err)
@@ -143,6 +170,7 @@ func (s *LoginController) Verify() {
 		s.ServeJSON()
 		return
 	}
+
 	if stored == nil || stored.(string) != pl.Nonce {
 		logs.Warn("Invalid nonce for user %s from %s", username, ip)
 		IfLoginFail(ip, true)
@@ -153,6 +181,7 @@ func (s *LoginController) Verify() {
 		s.ServeJSON()
 		return
 	}
+
 	if secureMode {
 		now := common.TimeNow().UnixMilli()
 		if pl.Timestamp < now-MaxSkew || pl.Timestamp > now+MaxSkew {
@@ -166,6 +195,7 @@ func (s *LoginController) Verify() {
 			return
 		}
 	}
+
 	time.Sleep(time.Millisecond * time.Duration(rand.Intn(20)))
 	if s.doLogin(username, pl.Password, totpCode, true) {
 		logs.Info("Login success for user %s from %s", username, ip)
@@ -181,6 +211,7 @@ func (s *LoginController) Verify() {
 
 func (s *LoginController) doLogin(username, password, totp string, explicit bool) bool {
 	clearIpRecord()
+
 	ip, _, _ := net.SplitHostPort(s.Ctx.Request.RemoteAddr)
 	httpOnlyPass := beego.AppConfig.String("x_nps_http_only")
 	if (beego.AppConfig.DefaultBool("allow_x_real_ip", false) && common.IsTrustedProxy(beego.AppConfig.DefaultString("trusted_proxy_ips", "127.0.0.1"), ip)) ||
@@ -202,6 +233,7 @@ func (s *LoginController) doLogin(username, password, totp string, explicit bool
 		auth = true
 		server.Bridge.Register.Store(common.GetIpByAddr(s.Ctx.Input.IP()), time.Now().Add(time.Hour*time.Duration(2)))
 	}
+
 	b, err := beego.AppConfig.Bool("allow_user_login")
 	if err == nil && b && !auth && username != "" && password != "" {
 		allowVkey := beego.AppConfig.DefaultBool("allow_user_vkey_login", b)
@@ -248,36 +280,53 @@ func (s *LoginController) doLogin(username, password, totp string, explicit bool
 			return true
 		})
 	}
+
 	if auth {
 		s.SetSession("auth", true)
 		loginRecord.Delete(ip)
 		return true
 	}
+
 	IfLoginFail(ip, explicit)
 	return false
 }
 
 func IfLoginFail(key string, explicit bool) {
-	if v, load := loginRecord.LoadOrStore(key, &record{hasLoginFailTimes: 1, lastLoginTime: time.Now()}); load && explicit {
-		vv := v.(*record)
-		vv.lastLoginTime = time.Now()
-		vv.hasLoginFailTimes += 1
-		loginRecord.Store(key, vv)
+	if !explicit || key == "" {
+		return
+	}
+	now := time.Now()
+	v, loaded := loginRecord.LoadOrStore(key, &record{hasLoginFailTimes: 1, lastLoginTime: now})
+	if loaded {
+		r := v.(*record)
+		r.mu.Lock()
+		r.lastLoginTime = now
+		r.hasLoginFailTimes++
+		r.mu.Unlock()
 	}
 }
 
 func IsLoginBan(key string, ti int64) bool {
+	if key == "" {
+		return false
+	}
 	if v, ok := loginRecord.Load(key); ok {
-		vv := v.(*record)
-		duration := time.Now().Unix() - vv.lastLoginTime.Unix()
+		r := v.(*record)
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		duration := time.Now().Unix() - r.lastLoginTime.Unix()
+
 		if duration < BanTime {
 			logs.Warn("%s request rate too high, login blocked", key)
 			return true
 		}
+
 		if duration >= ti {
-			vv.hasLoginFailTimes = 0
+			r.hasLoginFailTimes = 0
 		}
-		if vv.hasLoginFailTimes >= MaxFailTimes {
+
+		if r.hasLoginFailTimes >= MaxFailTimes {
 			logs.Warn("%s has reached maximum failed attempts, login blocked", key)
 			return true
 		}
@@ -363,18 +412,86 @@ func (s *LoginController) Out() {
 	s.Redirect(beego.AppConfig.String("web_base_url")+"/login/index", 302)
 }
 
-func clearIpRecord() {
-	rand.Seed(time.Now().UnixNano())
-	x := rand.Intn(100)
-	if x == 1 {
-		loginRecord.Range(func(key, value interface{}) bool {
-			v := value.(*record)
-			if time.Now().Unix()-v.lastLoginTime.Unix() >= UserBanTime {
-				loginRecord.Delete(key)
-			}
-			return true
+// GetLoginBanList 获取当前所有封禁记录
+func GetLoginBanList() []BanRecord {
+	var list []BanRecord
+	now := time.Now()
+
+	loginRecord.Range(func(key, value interface{}) bool {
+		k := key.(string)
+		r := value.(*record)
+
+		banType := "username"
+		ti := UserBanTime
+		if net.ParseIP(k) != nil {
+			banType = "ip"
+			ti = IpBanTime
+		}
+
+		r.mu.Lock()
+		fail := r.hasLoginFailTimes
+		last := r.lastLoginTime
+		r.mu.Unlock()
+
+		duration := now.Unix() - last.Unix()
+		isBanned := (duration < BanTime) || (fail >= MaxFailTimes && duration < ti)
+
+		list = append(list, BanRecord{
+			Key:           k,
+			FailTimes:     fail,
+			LastLoginTime: last.Format("2006-01-02 15:04:05"),
+			IsBanned:      isBanned,
+			BanType:       banType,
 		})
+		return true
+	})
+	return list
+}
+
+// RemoveLoginBan 手动解除指定key的封禁
+func RemoveLoginBan(key string) bool {
+	if key == "" {
+		return false
 	}
+	if _, ok := loginRecord.Load(key); ok {
+		loginRecord.Delete(key)
+		return true
+	}
+	return false
+}
+
+// RemoveAllLoginBan 清除所有封禁记录
+func RemoveAllLoginBan() {
+	loginRecord.Range(func(key, value interface{}) bool {
+		loginRecord.Delete(key)
+		return true
+	})
+}
+
+func clearIpRecord() {
+	if rand.Intn(100) != 1 {
+		return
+	}
+
+	now := time.Now()
+	loginRecord.Range(func(key, value interface{}) bool {
+		k := key.(string)
+		r := value.(*record)
+
+		ttl := UserBanTime
+		if net.ParseIP(k) != nil {
+			ttl = IpBanTime
+		}
+
+		r.mu.Lock()
+		last := r.lastLoginTime
+		r.mu.Unlock()
+
+		if now.Unix()-last.Unix() >= ttl {
+			loginRecord.Delete(k)
+		}
+		return true
+	})
 }
 
 func adminAuth(username, password, totp string) bool {

@@ -328,6 +328,54 @@
 		<zh-CN>全局参数</zh-CN>
 		<en-US>Global Params</en-US>
 	</lang>
+	<lang id="word-banlist">
+		<zh-CN>封禁管理</zh-CN>
+		<en-US>Ban List</en-US>
+	</lang>
+	<lang id="word-bankey">
+		<zh-CN>封禁对象</zh-CN>
+		<en-US>Banned Key</en-US>
+	</lang>
+	<lang id="word-bantype">
+		<zh-CN>类型</zh-CN>
+		<en-US>Type</en-US>
+	</lang>
+	<lang id="word-failtimes">
+		<zh-CN>失败次数</zh-CN>
+		<en-US>Fail Times</en-US>
+	</lang>
+	<lang id="word-banstatus">
+		<zh-CN>封禁状态</zh-CN>
+		<en-US>Ban Status</en-US>
+	</lang>
+	<lang id="word-banned">
+		<zh-CN>已封禁</zh-CN>
+		<en-US>Banned</en-US>
+	</lang>
+	<lang id="word-normal">
+		<zh-CN>正常</zh-CN>
+		<en-US>Normal</en-US>
+	</lang>
+	<lang id="word-lastfailtime">
+		<zh-CN>最后失败时间</zh-CN>
+		<en-US>Last Fail Time</en-US>
+	</lang>
+	<lang id="word-unban">
+		<zh-CN>解封</zh-CN>
+		<en-US>Unban</en-US>
+	</lang>
+	<lang id="word-unbanall">
+		<zh-CN>清除所有记录</zh-CN>
+		<en-US>Clear All</en-US>
+	</lang>
+	<lang id="word-refresh">
+		<zh-CN>刷新</zh-CN>
+		<en-US>Refresh</en-US>
+	</lang>
+	<lang id="word-username">
+		<zh-CN>用户名</zh-CN>
+		<en-US>Username</en-US>
+	</lang>
 	<lang id="word-exportflow">
 		<zh-CN>出口流量</zh-CN>
 		<en-US>Export Flow</en-US>
@@ -1115,6 +1163,14 @@
 			<zh-CN>你确定你要停止它吗？</zh-CN>
 			<en-US>Are you sure you want to stop it?</en-US>
 		</lang>
+		<lang id="unban">
+			<zh-CN>你确定要解除该封禁吗？</zh-CN>
+			<en-US>Are you sure you want to unban this record?</en-US>
+		</lang>
+		<lang id="unbanall">
+			<zh-CN>你确定要清除所有封禁记录吗？</zh-CN>
+			<en-US>Are you sure you want to clear all ban records?</en-US>
+		</lang>
 	</confirm>
 
 	<reply>
@@ -1245,6 +1301,22 @@
 		<lang id="copied">
 			<zh-CN>已复制</zh-CN>
 			<en-US>Copied</en-US>
+		</lang>
+		<lang id="unbansuccess">
+			<zh-CN>解封成功</zh-CN>
+			<en-US>Unban Success</en-US>
+		</lang>
+		<lang id="recordnotfound">
+			<zh-CN>记录未找到</zh-CN>
+			<en-US>Record Not Found</en-US>
+		</lang>
+		<lang id="keyisrequired">
+			<zh-CN>参数缺失</zh-CN>
+			<en-US>Key Is Required</en-US>
+		</lang>
+		<lang id="allrecordscleared">
+			<zh-CN>所有记录已清除</zh-CN>
+			<en-US>All Records Cleared</en-US>
 		</lang>
 	</reply>
 
