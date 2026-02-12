@@ -107,5 +107,5 @@ func (s *GlobalController) BanClean() {
 	}
 
 	CleanBanRecord(true)
-	s.AjaxOk("clean success")
+	s.AjaxOk("operation success")
 }
