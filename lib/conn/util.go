@@ -44,12 +44,12 @@ func GetTlsConn(c net.Conn, sni string) (net.Conn, error) {
 		InsecureSkipVerify: true,
 		ServerName:         serverName,
 	}
-	c = tls.Client(c, tlsConf)
-	if err := c.(*tls.Conn).Handshake(); err != nil {
+	tlsConn := tls.Client(c, tlsConf)
+	if err := tlsConn.Handshake(); err != nil {
 		logs.Error("TLS handshake with backend failed: %v", err)
 		return nil, err
 	}
-	return c, nil
+	return tlsConn, nil
 }
 
 // GetLenBytes get the assembled amount data(len 4 and content)

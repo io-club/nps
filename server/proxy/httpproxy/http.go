@@ -301,26 +301,30 @@ func (s *HttpServer) handleWebsocket(w http.ResponseWriter, r *http.Request, hos
 	}
 
 	if host.TargetIsHttps {
-		sni := r.Context().Value(ctxSNI).(string)
-		netConn, err = conn.GetTlsConn(netConn, sni)
+		sni, _ := r.Context().Value(ctxSNI).(string)
+		tlsConn, err := conn.GetTlsConn(netConn, sni)
 		if err != nil {
+			_ = netConn.Close()
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = w.Write(s.ErrorContent)
 			return
 		}
+		netConn = tlsConn
 	}
 
 	s.ChangeHostAndHeader(r, host.HostChange, host.HeaderChange, isHttpOnlyRequest || host.CompatMode)
 
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
+		_ = netConn.Close()
 		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
 		logs.Error("handleWebsocket: Hijack not supported")
 		return
 	}
 	clientConn, clientBuf, err := hijacker.Hijack()
 	if err != nil {
+		_ = netConn.Close()
 		http.Error(w, "Hijack failed", http.StatusInternalServerError)
 		logs.Error("handleWebsocket: Hijack failed")
 		return
@@ -446,10 +450,14 @@ func (s *HttpServer) DialTlsContext(ctx context.Context, network, addr string) (
 	if err != nil {
 		return nil, err
 	}
+
 	sni := ctx.Value(ctxSNI).(string)
-	c, err = conn.GetTlsConn(c, sni)
+
+	tlsConn, err := conn.GetTlsConn(c, sni)
 	if err != nil {
+		_ = c.Close()
 		return nil, err
 	}
-	return c, nil
+
+	return tlsConn, nil
 }
