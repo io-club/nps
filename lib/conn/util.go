@@ -224,10 +224,20 @@ func CopyWaitGroup(conn1, conn2 net.Conn, crypt bool, snappy bool, rate *rate.Ra
 	proxyHeader := BuildProxyProtocolHeader(conn2, proxyProtocol)
 	if proxyHeader != nil {
 		logs.Debug("Sending Proxy Protocol v%d header to backend: %v", proxyProtocol, proxyHeader)
-		_, _ = connHandle.Write(proxyHeader)
+		if _, err := connHandle.Write(proxyHeader); err != nil {
+			logs.Warn("failed to write proxy protocol header: %v", err)
+			_ = conn1.Close()
+			_ = conn2.Close()
+			return
+		}
 	}
 	if rb != nil {
-		_, _ = connHandle.Write(rb)
+		if _, err := connHandle.Write(rb); err != nil {
+			logs.Warn("failed to write buffered pre-read data: %v", err)
+			_ = conn1.Close()
+			_ = conn2.Close()
+			return
+		}
 	}
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
