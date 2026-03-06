@@ -2571,6 +2571,10 @@ fieldset[disabled] .btn-white.active {
     font-size: 42px;
 }
 
+.btn.dim {
+    color: #fff !important;
+}
+
 button.dim {
     display: inline-block;
     text-decoration: none;
