@@ -145,6 +145,7 @@ npc update && npc restart
   - 优化API鉴权逻辑
   - 优化登录限制逻辑
   - 优化NPC多开逻辑
+  - 添加Ping测试按钮
   - 升级Go到1.26
   - 更新相关依赖包
 

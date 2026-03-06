@@ -24,6 +24,9 @@
                                 <a class="btn btn-danger dim" onclick="submitform('clear', '{{.web_base_url}}/client/clear', {'id': 0, 'mode': 'flow'})">
                                     <i class="fa fa-fw fa-lg fa-eraser"></i>
                                     <span langtag="word-clearflow"></span></a>
+                                <a class="btn btn-info dim ml-2" onclick="triggerVisibleClientPing(this)">
+                                    <i class="fa fa-fw fa-lg fa-signal"></i>
+                                    <span langtag="word-ping"></span></a>
                             </div>
                         </div>
                         <table class="table-striped table-hover" data-mobile-responsive="true" id="taskList_table"></table>
@@ -75,10 +78,7 @@
         detailView: true,
         smartDisplay: true, // 智能显示 pagination 和 cardview 等
         onExpandRow: function () {$('body').setLang ('.detail-view');},
-        onPostBody: function (data) {
-            if ($(this)[0].locale != undefined) $('body').setLang('#table');
-            autoPingVisibleClients();
-        },
+        onPostBody: function (data) { if ($(this)[0].locale != undefined) $('body').setLang('#table'); },
         detailFormatter: function (index, row, element) {
             tmp = '<b langtag="word-maxconnections"></b>: '
                 {{if eq true .isAdmin}}
@@ -467,13 +467,19 @@
         });
     }
 
-    function autoPingVisibleClients() {
+    function triggerVisibleClientPing(btn) {
+        var $btn = $(btn);
+        if ($btn.data('pinging')) return;
+        $btn.data('pinging', true).addClass('disabled');
         $('#table').find('span.client-online-ping[data-id]').each(function () {
             var id = parseInt($(this).attr('data-id'), 10);
             if (!isNaN(id) && id > 0) {
                 pingClient(this, id);
             }
         });
+        setTimeout(function () {
+            $btn.data('pinging', false).removeClass('disabled');
+        }, 600);
     }
 
     function showQr(el) {
