@@ -139,6 +139,15 @@ npc update && npc restart
 
 ### Stable
 
+- **v0.34.5 (2026-03-06)**
+  - 优化连接释放逻辑
+  - 优化P2P处理性能
+  - 优化API鉴权逻辑
+  - 优化登录限制逻辑
+  - 优化NPC多开逻辑
+  - 升级Go到1.26
+  - 更新相关依赖包
+
 - **v0.34.4 (2026-02-12)**
   - 添加登录限制配置参数，支持网页管理登录封禁 [#209](https://github.com/djylb/nps/pull/209) (感谢[Yourdaylight](https://github.com/Yourdaylight))
   - 添加强制刷新封禁列表按钮
