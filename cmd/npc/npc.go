@@ -357,10 +357,8 @@ func (p *Npc) run() error {
 		}
 	}()
 	run(p.ctx, p.cancel)
-	select {
-	case <-p.exit:
-		logs.Warn("stop...")
-	}
+	<-p.exit
+	logs.Warn("stop...")
 	return nil
 }
 

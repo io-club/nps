@@ -616,7 +616,7 @@ func (mgr *P2PManager) newUdpConn(localAddr string, cfg *config.CommonConfig, l 
 			}
 			return
 		}
-		defer c.Close()
+		defer func() { _ = c.Close() }()
 		mgr.mu.Lock()
 		if mgr.uuid == "" {
 			mgr.uuid = uuid
@@ -630,7 +630,7 @@ func (mgr *P2PManager) newUdpConn(localAddr string, cfg *config.CommonConfig, l 
 		return
 	}
 	remoteConn := conn.NewConn(c)
-	defer remoteConn.Close()
+	defer func() { _ = remoteConn.Close() }()
 	mgr.mu.Lock()
 	uuid := mgr.uuid
 	mgr.mu.Unlock()

@@ -166,7 +166,8 @@ func StartFromFile(pCtx context.Context, pCancel context.CancelFunc, path string
 			p2pm := NewP2PManager(pCtx, pCancel, cnf.CommonConfig)
 			//create local server secret or p2p
 			for _, v := range cnf.LocalServer {
-				go p2pm.StartLocalServer(v)
+				vv := v
+				go func(local *config.LocalServer) { _ = p2pm.StartLocalServer(local) }(vv)
 			}
 			return
 		}
@@ -421,7 +422,7 @@ func NewConn(tp string, vkey string, server string, proxyUrl string, localIP str
 	}
 
 	if connection == nil {
-		return nil, "", fmt.Errorf("NewConn: unexpected nil connection for tp=%q server=%q", tp, server)
+		return nil, "", fmt.Errorf("newConn: unexpected nil connection for tp=%q server=%q", tp, server)
 	}
 
 	if err != nil {
@@ -545,7 +546,7 @@ func NewConn(tp string, vkey string, server string, proxyUrl string, localIP str
 		if err != nil {
 			logs.Error("error reading server response: %v", err)
 			_ = c.Close()
-			return nil, "", errors.New(fmt.Sprintf("Validation key %s incorrect", vkey))
+			return nil, "", fmt.Errorf("validation key %s incorrect", vkey)
 		}
 		if !bytes.Equal(b, crypt.ComputeHMAC(vkey, ts, hmacBuf, []byte(version.GetVersion(Ver)))) {
 			logs.Warn("The client does not match the server version. The current core version of the client is %s", version.GetVersion(Ver))
@@ -594,7 +595,7 @@ func NewConn(tp string, vkey string, server string, proxyUrl string, localIP str
 
 func SendType(c *conn.Conn, connType, uuid string) error {
 	if c == nil {
-		return fmt.Errorf("SendType: nil conn (connType=%s uuid=%s)", connType, uuid)
+		return fmt.Errorf("sendType: nil conn (connType=%s uuid=%s)", connType, uuid)
 	}
 	if _, err := c.BufferWrite([]byte(connType)); err != nil {
 		_ = c.Close()
@@ -683,7 +684,7 @@ func NewHttpProxyConn(proxyURL *url.URL, remoteAddr string, timeout time.Duratio
 		_ = proxyConn.Close()
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		_ = proxyConn.Close()
 		return nil, errors.New("proxy CONNECT failed: " + resp.Status)
