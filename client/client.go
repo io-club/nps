@@ -235,7 +235,7 @@ func (s *TRPClient) newUdpConn(localAddr, rAddr string, md5Password string) {
 		}
 		defer func() { _ = quicListener.Close() }()
 	} else {
-		kcpListener, err = kcp.ServeConn(nil, 150, 3, localConn)
+		kcpListener, err = kcp.ServeConn(nil, 10, 3, localConn)
 		if err != nil {
 			logs.Error("kcp.ServeConn err: %v", err)
 			return

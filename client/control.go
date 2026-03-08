@@ -415,7 +415,6 @@ func NewConn(tp string, vkey string, server string, proxyUrl string, localIP str
 	default:
 		sess, err = dialKCPWithLocalIP(server, localIP)
 		if err == nil {
-			conn.SetUdpSession(sess)
 			connection = sess
 		}
 	}
@@ -726,6 +725,7 @@ func dialKCPWithLocalIP(server, localIP string) (*kcp.UDPSession, error) {
 		_ = packetConn.Close()
 		return nil, err
 	}
+	conn.SetUdpSession(sess)
 	return sess, nil
 }
 
