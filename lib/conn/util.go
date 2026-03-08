@@ -20,7 +20,6 @@ import (
 	"github.com/djylb/nps/lib/goroutine"
 	"github.com/djylb/nps/lib/logs"
 	"github.com/djylb/nps/lib/rate"
-	"github.com/xtaci/kcp-go/v5"
 )
 
 // GetConn get crypt or snappy conn
@@ -178,18 +177,6 @@ func HandleUdp5(ctx context.Context, serverConn net.Conn, timeout time.Duration,
 			return
 		}
 	}
-}
-
-// SetUdpSession udp connection setting
-func SetUdpSession(sess *kcp.UDPSession) {
-	//sess.SetStreamMode(true)
-	sess.SetWindowSize(512, 512)
-	_ = sess.SetReadBuffer(128 * 1024)
-	_ = sess.SetWriteBuffer(128 * 1024)
-	sess.SetNoDelay(1, 10, 3, 1)
-	sess.SetMtu(1350)
-	sess.SetACKNoDelay(true)
-	sess.SetWriteDelay(false)
 }
 
 func WriteACK(c net.Conn, timeout time.Duration) error {

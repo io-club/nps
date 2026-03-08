@@ -413,7 +413,7 @@ func NewConn(tp string, vkey string, server string, proxyUrl string, localIP str
 		}
 		connection = conn.NewQuicAutoCloseConn(stream, sess)
 	default:
-		sess, err = dialKCPWithLocalIP(server, localIP)
+		sess, err = conn.DialKCPWithLocalIP(server, localIP)
 		if err == nil {
 			connection = sess
 		}
@@ -708,24 +708,6 @@ func dialQuicWithLocalIP(ctx context.Context, server string, tlsCfg *tls.Config,
 		_ = packetConn.Close()
 		return nil, err
 	}
-	return sess, nil
-}
-
-func dialKCPWithLocalIP(server, localIP string) (*kcp.UDPSession, error) {
-	bindAddr := common.BuildUDPBindAddr(localIP)
-	if bindAddr == nil {
-		return kcp.DialWithOptions(server, nil, 10, 3)
-	}
-	packetConn, err := net.ListenUDP("udp", bindAddr)
-	if err != nil {
-		return nil, err
-	}
-	sess, err := kcp.NewConn(server, nil, 10, 3, packetConn)
-	if err != nil {
-		_ = packetConn.Close()
-		return nil, err
-	}
-	conn.SetUdpSession(sess)
 	return sess, nil
 }
 

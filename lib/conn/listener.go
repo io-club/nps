@@ -33,6 +33,10 @@ func NewKcpListenerAndProcess(addr string, f func(c net.Conn)) error {
 	for {
 		c, err := kcpListener.AcceptKCP()
 		if err != nil {
+			//if errors.Is(err, net.ErrClosed) {
+			//	logs.Info("KCP listener closed intentionally.")
+			//	break
+			//}
 			logs.Trace("KCP accept session error: %v", err)
 			continue
 		}

@@ -19,7 +19,6 @@ import (
 	"github.com/djylb/nps/lib/mux"
 	"github.com/djylb/nps/server/proxy"
 	"github.com/quic-go/quic-go"
-	"github.com/xtaci/kcp-go/v5"
 )
 
 // ------------------------------
@@ -688,13 +687,15 @@ func (mgr *P2PManager) newUdpConn(localAddr string, cfg *config.CommonConfig, l 
 
 	var udpTunnel net.Conn
 	var sess *quic.Conn
+
+	rUDPAddr, err := net.ResolveUDPAddr("udp", remoteAddr)
+	if err != nil {
+		logs.Error("Failed to resolve remote UDP addr: %v", err)
+		_ = localConn.Close()
+		return
+	}
+
 	if mode == common.CONN_QUIC {
-		rUDPAddr, err := net.ResolveUDPAddr("udp", remoteAddr)
-		if err != nil {
-			logs.Error("Failed to resolve remote UDP addr: %v", err)
-			_ = localConn.Close()
-			return
-		}
 		sess, err = quic.Dial(mgr.ctx, localConn, rUDPAddr, TlsCfg, QuicConfig)
 		if err != nil {
 			logs.Error("QUIC dial error: %v", err)
@@ -714,13 +715,12 @@ func (mgr *P2PManager) newUdpConn(localAddr string, cfg *config.CommonConfig, l 
 			return
 		}
 	} else {
-		kcpTunnel, err := kcp.NewConn(remoteAddr, nil, 10, 3, localConn)
-		if err != nil || kcpTunnel == nil {
-			logs.Warn("KCP NewConn failed: %v", err)
+		kcpTunnel, err := conn.NewKCPSessionWithConn(localConn, rUDPAddr)
+		if err != nil {
+			logs.Warn("KCP create failed: %v", err)
 			_ = localConn.Close()
 			return
 		}
-		conn.SetUdpSession(kcpTunnel)
 		udpTunnel = kcpTunnel
 	}
 
