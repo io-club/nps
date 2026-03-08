@@ -27,9 +27,9 @@ func TestSetCustomDNSFormatsAddress(t *testing.T) {
 	})
 
 	tests := []struct {
-		name   string
-		input  string
-		want   string
+		name  string
+		input string
+		want  string
 	}{
 		{name: "ipv4 without port", input: "1.1.1.1", want: "1.1.1.1:53"},
 		{name: "ipv4 with port", input: "1.1.1.1:5353", want: "1.1.1.1:5353"},

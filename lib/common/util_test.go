@@ -257,9 +257,9 @@ func TestSliceAndMapHelpers(t *testing.T) {
 	a1 := []string{"x"}
 	a2 := []string{"m", "n", "o"}
 	a3 := []string{}
-	max := ExtendArrs(&a1, &a2, &a3)
-	if max != 3 {
-		t.Fatalf("ExtendArrs() max = %d, want 3", max)
+	maxA := ExtendArrs(&a1, &a2, &a3)
+	if maxA != 3 {
+		t.Fatalf("ExtendArrs() max = %d, want 3", maxA)
 	}
 	if len(a1) != 3 || a1[2] != "x" || len(a3) != 3 || a3[0] != "" {
 		t.Fatalf("ExtendArrs() unexpected arrays: a1=%v a3=%v", a1, a3)

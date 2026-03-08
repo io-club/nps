@@ -225,7 +225,7 @@ func loadObsoleteJsonFile(b []byte, t interface{}, f func(value interface{})) {
 				return
 			}
 			f(&client)
-			break
+			//break
 		case Host:
 			var host Host
 			if err = json.Unmarshal([]byte(v), &host); err != nil {
@@ -233,7 +233,7 @@ func loadObsoleteJsonFile(b []byte, t interface{}, f func(value interface{})) {
 				return
 			}
 			f(&host)
-			break
+			//break
 		case Tunnel:
 			var tunnel Tunnel
 			if err = json.Unmarshal([]byte(v), &tunnel); err != nil {
@@ -241,7 +241,7 @@ func loadObsoleteJsonFile(b []byte, t interface{}, f func(value interface{})) {
 				return
 			}
 			f(&tunnel)
-			break
+			//break
 		}
 	}
 }
@@ -261,7 +261,7 @@ func loadJsonFile(b []byte, t interface{}, f func(value interface{})) error {
 		for i := range clients {
 			f(&clients[i])
 		}
-		break
+		//break
 	case Host:
 		var hosts []Host
 		if len(b) != 0 {
@@ -273,7 +273,7 @@ func loadJsonFile(b []byte, t interface{}, f func(value interface{})) error {
 		for i := range hosts {
 			f(&hosts[i])
 		}
-		break
+		//break
 	case Tunnel:
 		var tunnels []Tunnel
 		if len(b) != 0 {
@@ -285,7 +285,7 @@ func loadJsonFile(b []byte, t interface{}, f func(value interface{})) error {
 		for i := range tunnels {
 			f(&tunnels[i])
 		}
-		break
+		//break
 	}
 	return nil
 }

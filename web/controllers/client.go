@@ -265,7 +265,7 @@ func clearClientStatus(c *file.Client, name string) {
 			c.Rate.Start()
 		}
 	}
-	return
+	//return
 }
 
 func clearStatus(id int, name string) (err error) {
@@ -345,5 +345,5 @@ func (s *ClientController) Qr() {
 		return
 	}
 	s.Ctx.Output.Header("Content-Type", "image/png")
-	s.Ctx.Output.Body(png)
+	_ = s.Ctx.Output.Body(png)
 }

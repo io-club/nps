@@ -78,5 +78,5 @@ func isInArr(arr *[]int, val int, remark string, tp string) {
 		}
 	}
 	*arr = append(*arr, val)
-	return
+	//return
 }

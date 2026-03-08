@@ -313,7 +313,7 @@ func configureLogging() {
 		*logPath = filepath.Join(common.GetRunPath(), *logPath)
 	}
 	if common.IsWindows() {
-		*logPath = strings.Replace(*logPath, "\\", "\\\\", -1)
+		*logPath = strings.ReplaceAll(*logPath, "\\", "\\\\")
 	}
 	logs.Init(*logType, *logLevel, *logPath, *logMaxSize, *logMaxFiles, *logMaxDays, *logCompress, *logColor)
 }
@@ -334,7 +334,7 @@ func NewNpc(pCtx context.Context) *Npc {
 }
 
 func (p *Npc) Start(_ service.Service) error {
-	go p.run()
+	go func() { _ = p.run() }()
 	return nil
 }
 
@@ -389,21 +389,21 @@ func run(ctx context.Context, cancel context.CancelFunc) {
 		commonConfig.Client.Cnf = new(file.Config)
 		commonConfig.DisconnectTime = *p2pTime
 		p2pm := client.NewP2PManager(ctx, cancel, commonConfig)
-		go p2pm.StartLocalServer(localServer)
+		go func() { _ = p2pm.StartLocalServer(localServer) }()
 		return
 	}
 	env := common.GetEnvMap()
 	if *serverAddr == "" {
-		*serverAddr, _ = env["NPC_SERVER_ADDR"]
+		*serverAddr = env["NPC_SERVER_ADDR"]
 	}
 	if *verifyKey == "" {
-		*verifyKey, _ = env["NPC_SERVER_VKEY"]
+		*verifyKey = env["NPC_SERVER_VKEY"]
 	}
 	if *configPath == "" {
-		*configPath, _ = env["NPC_CONFIG_PATH"]
+		*configPath = env["NPC_CONFIG_PATH"]
 	}
 	if *localIP == "" {
-		*localIP, _ = env["NPC_LOCAL_IP"]
+		*localIP = env["NPC_LOCAL_IP"]
 	}
 	hasCommand := *verifyKey != "" && *serverAddr != ""
 	if hasCommand {

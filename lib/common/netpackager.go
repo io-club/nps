@@ -120,7 +120,7 @@ func (addr *Addr) Encode(b []byte) (int, error) {
 }
 
 func (h *UDPHeader) Write(w io.Writer) error {
-	b := BufPoolUdp.Get().([]byte)
+	b := BufPoolUdp.Get()
 	defer BufPoolUdp.Put(b)
 
 	binary.BigEndian.PutUint16(b[:2], h.Rsv)
@@ -142,7 +142,7 @@ type UDPDatagram struct {
 }
 
 func ReadUDPDatagram(r io.Reader) (*UDPDatagram, error) {
-	b := BufPoolUdp.Get().([]byte)
+	b := BufPoolUdp.Get()
 	defer BufPoolUdp.Put(b)
 
 	// ensure we have RSV(2) + FRAG(1) + ATYP(1) + at least 1 more byte (for domain length)
@@ -179,7 +179,7 @@ func ReadUDPDatagram(r io.Reader) (*UDPDatagram, error) {
 		if _, err := io.ReadFull(r, b[n:hlen]); err != nil {
 			return nil, err
 		}
-		n = hlen
+		//n = hlen
 	}
 
 	header.Addr = new(Addr)
@@ -220,7 +220,7 @@ func (d *UDPDatagram) Write(w io.Writer) error {
 		h = &UDPHeader{}
 	}
 
-	b := BufPoolUdp.Get().([]byte)
+	b := BufPoolUdp.Get()
 	defer BufPoolUdp.Put(b)
 
 	binary.BigEndian.PutUint16(b[:2], h.Rsv)

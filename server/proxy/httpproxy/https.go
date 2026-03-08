@@ -160,7 +160,7 @@ func (s *HttpsServer) Start() error {
 
 func checkHTTPAndRedirect(c net.Conn, rb []byte) {
 	_ = c.SetDeadline(time.Now().Add(10 * time.Second))
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	logs.Debug("Pre-read rb content: %q", string(rb))
 

@@ -46,7 +46,7 @@ func NewSmartUdpConn(conns []net.PacketConn, addr *net.UDPAddr) *SmartUdpConn {
 func (s *SmartUdpConn) readLoop(c net.PacketConn) {
 	defer s.wg.Done()
 	for {
-		buf := common.BufPoolMax.Get().([]byte)
+		buf := common.BufPool.Get()
 		n, addr, err := c.ReadFrom(buf)
 		s.mu.Lock()
 		s.lastConn = c
@@ -55,12 +55,12 @@ func (s *SmartUdpConn) readLoop(c net.PacketConn) {
 
 		select {
 		case <-s.quit:
-			common.PutBufPoolMax(buf)
+			common.BufPool.Put(buf)
 			return
 		case s.packetCh <- pkt:
 			// delivered, buffer will be returned in ReadFrom or on flush
 		default:
-			common.PutBufPoolMax(buf)
+			common.BufPool.Put(buf)
 		}
 
 		if err != nil {
@@ -74,7 +74,7 @@ func (s *SmartUdpConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	if !ok {
 		return 0, nil, io.EOF
 	}
-	defer common.PutBufPoolMax(pkt.buf)
+	defer common.BufPool.Put(pkt.buf)
 	if pkt.err != nil {
 		return 0, nil, pkt.err
 	}
@@ -115,7 +115,7 @@ func (s *SmartUdpConn) Close() error {
 		s.wg.Wait()
 		close(s.packetCh)
 		for pkt := range s.packetCh {
-			common.PutBufPoolMax(pkt.buf)
+			common.BufPool.Put(pkt.buf)
 		}
 	})
 	return s.closeErr

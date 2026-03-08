@@ -122,8 +122,8 @@ func handleP2PUdp(
 	var peerLocal string
 	serverPort := common.GetPortByAddr(rAddr)
 
-	buf := common.BufPoolUdp.Get().([]byte)
-	defer common.PutBufPoolUdp(buf)
+	buf := common.BufPoolUdp.Get()
+	defer common.BufPoolUdp.Put(buf)
 
 	var punchedAddr net.Addr
 
@@ -159,7 +159,7 @@ func handleP2PUdp(
 
 		if rerr != nil {
 			var ne net.Error
-			if errors.As(rerr, &ne) && (ne.Timeout() || ne.Temporary()) {
+			if errors.As(rerr, &ne) && ne.Timeout() {
 				if !gotFirstAt.IsZero() && time.Now().After(collectUntil) {
 					break
 				}
@@ -706,8 +706,8 @@ func waitP2PHandshake(parentCtx context.Context, localConn net.PacketConn, sendR
 }
 
 func waitP2PHandshakeWithSeed(parentCtx context.Context, localConn net.PacketConn, sendRole string, readTimeout int, seed net.Addr) (remoteAddr, localAddr, role string, err error) {
-	buf := common.BufPoolUdp.Get().([]byte)
-	defer common.PutBufPoolUdp(buf)
+	buf := common.BufPoolUdp.Get()
+	defer common.BufPoolUdp.Put(buf)
 	localAddrStr := localConn.LocalAddr().String()
 
 	isServerAnnounce := func(pkt []byte) bool {
@@ -875,7 +875,7 @@ func waitP2PHandshakeWithSeed(parentCtx context.Context, localConn net.PacketCon
 		_ = localConn.SetReadDeadline(time.Time{})
 		if rerr != nil {
 			var ne net.Error
-			if errors.As(rerr, &ne) && (ne.Timeout() || ne.Temporary()) {
+			if errors.As(rerr, &ne) && ne.Timeout() {
 				continue
 			}
 			logs.Error("[P2P] handshake read fail role=%s local=%s err=%v", sendRole, localAddrStr, rerr)

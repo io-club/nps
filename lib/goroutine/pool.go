@@ -37,8 +37,8 @@ func newConnGroup(dst, src io.ReadWriteCloser, wg *sync.WaitGroup, n *int64, flo
 }
 
 func CopyBuffer(dst io.Writer, src io.Reader, flows []*file.Flow, task *file.Tunnel, remote string) (written int64, err error) {
-	buf := common.CopyBuff.Get()
-	defer common.CopyBuff.Put(buf)
+	buf := common.BufPoolCopy.Get()
+	defer common.BufPoolCopy.Put(buf)
 
 	checkedHTTP := false
 

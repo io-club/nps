@@ -85,10 +85,10 @@ func TestDomainIndex_LookupAndNormalization(t *testing.T) {
 	di.Add("api.example.com", 2) // duplicate should be ignored
 
 	cases := map[string][]int{
-		"api.example.com":     {1, 2, 3},
+		"api.example.com":      {1, 2, 3},
 		"deep.api.example.com": {1, 2, 3},
-		"example.com":         {1, 3},
-		"other.com":           nil,
+		"example.com":          {1, 3},
+		"other.com":            nil,
 	}
 
 	for domain, want := range cases {

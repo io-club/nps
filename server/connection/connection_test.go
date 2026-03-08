@@ -27,7 +27,7 @@ func getAvailablePort(t *testing.T) int {
 	if err != nil {
 		t.Fatalf("alloc port: %v", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	return l.Addr().(*net.TCPAddr).Port
 }
 

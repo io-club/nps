@@ -279,7 +279,7 @@ func (t *Tunnel) AllowsDestination(addr string) bool {
 		t.CompileDestACL()
 		t.RLock()
 		mode = t.DestAclMode
-		rules = t.DestAclRules
+		//rules = t.DestAclRules
 		set = t.DestAclSet
 		t.RUnlock()
 

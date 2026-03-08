@@ -52,10 +52,10 @@ func (s *UdpModeServer) Start() error {
 	}
 
 	for {
-		buf := common.BufPoolUdp.Get().([]byte)
+		buf := common.BufPoolUdp.Get()
 		n, addr, err := s.listener.ReadFromUDP(buf)
 		if err != nil {
-			common.PutBufPoolUdp(buf)
+			common.BufPoolUdp.Put(buf)
 			if strings.Contains(err.Error(), "use of closed network connection") {
 				break
 			}
@@ -64,7 +64,7 @@ func (s *UdpModeServer) Start() error {
 
 		// IP blacklist check
 		if s.Bridge.IsServer() && (IsGlobalBlackIp(addr.String()) || common.IsBlackIp(addr.String(), s.Task.Client.VerifyKey, s.Task.Client.BlackIpList)) {
-			common.PutBufPoolUdp(buf)
+			common.BufPoolUdp.Put(buf)
 			continue
 		}
 
@@ -87,10 +87,10 @@ func (s *UdpModeServer) Start() error {
 
 		select {
 		case <-ent.ctx.Done():
-			common.PutBufPoolUdp(buf)
+			common.BufPoolUdp.Put(buf)
 		case ent.ch <- packet{buf: buf, n: n}:
 		default:
-			common.PutBufPoolUdp(buf)
+			common.BufPoolUdp.Put(buf)
 		}
 	}
 
@@ -108,7 +108,7 @@ func (s *UdpModeServer) clientWorker(addr *net.UDPAddr, ent *entry) {
 		for {
 			select {
 			case pkt := <-ent.ch:
-				common.PutBufPoolUdp(pkt.buf)
+				common.BufPoolUdp.Put(pkt.buf)
 			default:
 				return
 			}
@@ -144,8 +144,8 @@ func (s *UdpModeServer) clientWorker(addr *net.UDPAddr, ent *entry) {
 	}
 
 	go func() {
-		buf := common.BufPoolUdp.Get().([]byte)
-		defer common.PutBufPoolUdp(buf)
+		buf := common.BufPoolUdp.Get()
+		defer common.BufPoolUdp.Put(buf)
 
 		for {
 			select {
@@ -192,11 +192,11 @@ func (s *UdpModeServer) clientWorker(addr *net.UDPAddr, ent *entry) {
 			})
 
 			if _, err := ent.conn.Write(data); err != nil {
-				common.PutBufPoolUdp(pkt.buf)
+				common.BufPoolUdp.Put(pkt.buf)
 				ent.cancel()
 				return
 			}
-			common.PutBufPoolUdp(pkt.buf)
+			common.BufPoolUdp.Put(pkt.buf)
 		}
 	}
 }

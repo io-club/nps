@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -202,7 +201,7 @@ func dealHost(s string) *file.Host {
 		case "host":
 			h.Host = item[1]
 		case "target_addr":
-			h.Target.TargetStr = strings.Replace(item[1], ",", "\n", -1)
+			h.Target.TargetStr = strings.ReplaceAll(item[1], ",", "\n")
 		case "proxy_protocol":
 			h.Target.ProxyProtocol = common.GetIntNoErrByStr(item[1])
 		case "host_change":
@@ -246,10 +245,10 @@ func dealHost(s string) *file.Host {
 			}
 		default:
 			if strings.Contains(item[0], "header_") {
-				headerChange += strings.Replace(item[0], "header_", "", -1) + ":" + item[1] + "\n"
+				headerChange += strings.ReplaceAll(item[0], "header_", "") + ":" + item[1] + "\n"
 			}
 			if strings.Contains(item[0], "response_") {
-				respHeaderChange += strings.Replace(item[0], "response_", "", -1) + ":" + item[1] + "\n"
+				respHeaderChange += strings.ReplaceAll(item[0], "response_", "") + ":" + item[1] + "\n"
 			}
 			h.HeaderChange = headerChange
 			h.RespHeaderChange = respHeaderChange
@@ -304,7 +303,7 @@ func dealTunnel(s string) *file.Tunnel {
 		case "mode":
 			t.Mode = item[1]
 		case "target_addr":
-			t.Target.TargetStr = strings.Replace(item[1], ",", "\n", -1)
+			t.Target.TargetStr = strings.ReplaceAll(item[1], ",", "\n")
 		case "proxy_protocol":
 			t.Target.ProxyProtocol = common.GetIntNoErrByStr(item[1])
 		case "target_port":
@@ -320,7 +319,7 @@ func dealTunnel(s string) *file.Tunnel {
 		case "dest_acl_mode":
 			t.DestAclMode = common.GetIntNoErrByStr(item[1])
 		case "dest_acl_rules":
-			t.DestAclRules = strings.Replace(item[1], ",", "\n", -1)
+			t.DestAclRules = strings.ReplaceAll(item[1], ",", "\n")
 		case "local_path":
 			t.LocalPath = item[1]
 		case "strip_pre":
@@ -410,7 +409,7 @@ func getAllTitle(content string) (arr []string, err error) {
 	m := make(map[string]bool)
 	for _, v := range arr {
 		if _, ok := m[v]; ok {
-			err = errors.New(fmt.Sprintf("Item names %s are not allowed to be duplicated", v))
+			err = fmt.Errorf("item names %s are not allowed to be duplicated", v)
 			return
 		}
 		m[v] = true

@@ -44,7 +44,7 @@ func AesDecrypt(crypted, key []byte) ([]byte, error) {
 	blockMode := cipher.NewCBCDecrypter(block, key[:blockSize])
 	origData := make([]byte, len(crypted))
 	blockMode.CryptBlocks(origData, crypted)
-	err, origData = PKCS5UnPadding(origData)
+	origData, err = PKCS5UnPadding(origData)
 	return origData, err
 }
 
@@ -56,13 +56,13 @@ func PKCS5Padding(ciphertext []byte, blockSize int) []byte {
 }
 
 // PKCS5UnPadding Remove excess
-func PKCS5UnPadding(origData []byte) (error, []byte) {
+func PKCS5UnPadding(origData []byte) ([]byte, error) {
 	length := len(origData)
 	unpadding := int(origData[length-1])
 	if (length - unpadding) < 0 {
-		return errors.New("len error"), nil
+		return nil, errors.New("len error")
 	}
-	return nil, origData[:(length - unpadding)]
+	return origData[:(length - unpadding)], nil
 }
 
 // EncryptBytes AES-GCM

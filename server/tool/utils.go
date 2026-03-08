@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	ports []int
+	ports   []int
 	portSet map[int]struct{}
 
 	statusCap  = 1440
@@ -28,7 +28,7 @@ var (
 )
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	//rand.Seed(time.Now().UnixNano())
 }
 
 func StartSystemInfo() {

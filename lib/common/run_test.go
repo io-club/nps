@@ -86,9 +86,9 @@ func TestRunTimeAndSecs(t *testing.T) {
 		}
 	}
 
-	min := int64(24*3600 + 2*3600 + 3*60 + 4)
-	if got := GetRunSecs(); got < min {
-		t.Fatalf("GetRunSecs() = %d, want >= %d", got, min)
+	minInt := int64(24*3600 + 2*3600 + 3*60 + 4)
+	if got := GetRunSecs(); got < minInt {
+		t.Fatalf("GetRunSecs() = %d, want >= %d", got, minInt)
 	}
 
 	if got := GetStartTime(); got != StartTime.Unix() {

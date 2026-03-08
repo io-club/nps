@@ -11,6 +11,13 @@ const (
 	poolSizeWindowBuffer = poolSizeBuffer
 )
 
+func normalizeForPut(buf []byte, size int) ([]byte, bool) {
+	if cap(buf) != size {
+		return nil, false
+	}
+	return buf[:size:size], true
+}
+
 type windowBufferPool struct {
 	pool sync.Pool
 }
@@ -18,8 +25,8 @@ type windowBufferPool struct {
 func newWindowBufferPool() *windowBufferPool {
 	return &windowBufferPool{
 		pool: sync.Pool{
-			New: func() interface{} {
-				return make([]byte, poolSizeWindowBuffer)
+			New: func() any {
+				return new([poolSizeWindowBuffer]byte)
 			},
 		},
 	}
@@ -35,18 +42,17 @@ func newWindowBufferPool() *windowBufferPool {
 //	}
 //}
 
-func (Self *windowBufferPool) Get() (buf []byte) {
-	buf = Self.pool.Get().([]byte)
-	//trace(buf, "get")
-	return buf[:poolSizeWindowBuffer]
+func (p *windowBufferPool) Get() []byte {
+	return p.pool.Get().(*[poolSizeWindowBuffer]byte)[:]
 }
 
-func (Self *windowBufferPool) Put(x []byte) {
-	//trace(x, "put")
-	if cap(x) != poolSizeWindowBuffer {
+func (p *windowBufferPool) Put(buf []byte) {
+	//trace(buf, "put")
+	b, ok := normalizeForPut(buf, poolSizeWindowBuffer)
+	if !ok {
 		return
 	}
-	Self.pool.Put(x[:poolSizeWindowBuffer]) // make buf to full
+	p.pool.Put((*[poolSizeWindowBuffer]byte)(b))
 }
 
 type muxPackagerPool struct {
@@ -56,7 +62,7 @@ type muxPackagerPool struct {
 func newMuxPackagerPool() *muxPackagerPool {
 	return &muxPackagerPool{
 		pool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				pack := muxPackager{}
 				return &pack
 			},
@@ -64,13 +70,13 @@ func newMuxPackagerPool() *muxPackagerPool {
 	}
 }
 
-func (Self *muxPackagerPool) Get() *muxPackager {
-	return Self.pool.Get().(*muxPackager)
+func (p *muxPackagerPool) Get() *muxPackager {
+	return p.pool.Get().(*muxPackager)
 }
 
-func (Self *muxPackagerPool) Put(pack *muxPackager) {
+func (p *muxPackagerPool) Put(pack *muxPackager) {
 	pack.reset()
-	Self.pool.Put(pack)
+	p.pool.Put(pack)
 }
 
 type listElementPool struct {
@@ -80,7 +86,7 @@ type listElementPool struct {
 func newListElementPool() *listElementPool {
 	return &listElementPool{
 		pool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				element := listElement{}
 				return &element
 			},
@@ -88,13 +94,13 @@ func newListElementPool() *listElementPool {
 	}
 }
 
-func (Self *listElementPool) Get() *listElement {
-	return Self.pool.Get().(*listElement)
+func (p *listElementPool) Get() *listElement {
+	return p.pool.Get().(*listElement)
 }
 
-func (Self *listElementPool) Put(element *listElement) {
+func (p *listElementPool) Put(element *listElement) {
 	element.Reset()
-	Self.pool.Put(element)
+	p.pool.Put(element)
 }
 
 var (

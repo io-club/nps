@@ -259,7 +259,7 @@ func (b *P2pBridge) IsServer() bool {
 }
 
 func (b *P2pBridge) CliProcess(*conn.Conn, string) {
-	return
+	// no-op
 }
 
 func (mgr *P2PManager) StartLocalServer(l *config.LocalServer) error {
@@ -620,8 +620,6 @@ func (mgr *P2PManager) newUdpConn(localAddr string, cfg *config.CommonConfig, l 
 		mgr.mu.Lock()
 		if mgr.uuid == "" {
 			mgr.uuid = uuid
-		} else {
-			uuid = mgr.uuid
 		}
 		mgr.mu.Unlock()
 	}
@@ -685,6 +683,7 @@ func (mgr *P2PManager) newUdpConn(localAddr string, cfg *config.CommonConfig, l 
 	if mode == "" || mode != P2PMode {
 		mode = common.CONN_KCP
 	}
+	logs.Debug("handleP2PUdp result local=%s remote=%s role=%s mode=%s data=%s", localAddr, remoteAddr, role, mode, data)
 	//logs.Debug("handleP2PUdp ok")
 
 	var udpTunnel net.Conn

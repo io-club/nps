@@ -308,7 +308,7 @@ func downloadLatest(bin string) string {
 		destPath, err := os.MkdirTemp(os.TempDir(), "nps-")
 		if err != nil {
 			_ = resp.Body.Close()
-			lastErr = err
+			//lastErr = err
 			//continue
 			log.Fatal("Failed to create temp directory:", err)
 		}
@@ -334,13 +334,13 @@ func downloadLatest(bin string) string {
 		}
 
 		if bin == "server" {
-			destPath = strings.Replace(destPath, "/web", "", -1)
-			destPath = strings.Replace(destPath, `\web`, "", -1)
-			destPath = strings.Replace(destPath, "/views", "", -1)
-			destPath = strings.Replace(destPath, `\views`, "", -1)
+			destPath = strings.ReplaceAll(destPath, "/web", "")
+			destPath = strings.ReplaceAll(destPath, `\web`, "")
+			destPath = strings.ReplaceAll(destPath, "/views", "")
+			destPath = strings.ReplaceAll(destPath, `\views`, "")
 		} else {
-			destPath = strings.Replace(destPath, `\conf`, "", -1)
-			destPath = strings.Replace(destPath, "/conf", "", -1)
+			destPath = strings.ReplaceAll(destPath, `\conf`, "")
+			destPath = strings.ReplaceAll(destPath, "/conf", "")
 		}
 		return destPath
 	}
@@ -481,7 +481,7 @@ func CopyDir(srcPath string, destPath string) error {
 			return err
 		}
 		if !f.IsDir() {
-			destNewPath := strings.Replace(path, srcPath, destPath, -1)
+			destNewPath := strings.ReplaceAll(path, srcPath, destPath)
 			log.Println("copy file: " + path + " -> " + destNewPath)
 			_, _ = copyFile(path, destNewPath)
 			if !common.IsWindows() {

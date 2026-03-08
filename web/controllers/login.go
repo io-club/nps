@@ -62,7 +62,7 @@ func InitLogin() {
 	MaxLoginBody = beego.AppConfig.DefaultInt64("login_max_body", 1024)
 	MaxSkew = beego.AppConfig.DefaultInt64("login_max_skew", 5*60*1000)
 
-	rand.Seed(time.Now().UnixNano())
+	//rand.Seed(time.Now().UnixNano())
 	startLoginRecordCleaner()
 
 	// use beego cache system store the captcha data

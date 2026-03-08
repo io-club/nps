@@ -106,7 +106,7 @@ func main() {
 			logPath = filepath.Join(common.GetRunPath(), logPath)
 		}
 		if common.IsWindows() {
-			logPath = strings.Replace(logPath, "\\", "\\\\", -1)
+			logPath = strings.ReplaceAll(logPath, "\\", "\\\\")
 		}
 	}
 	logMaxFiles := beego.AppConfig.DefaultInt("log_max_files", 30)
@@ -258,7 +258,7 @@ type nps struct {
 
 func (p *nps) Start(s service.Service) error {
 	_, _ = s.Status()
-	go p.run()
+	go func() { _ = p.run() }()
 	return nil
 }
 func (p *nps) Stop(s service.Service) error {
@@ -280,10 +280,8 @@ func (p *nps) run() error {
 		}
 	}()
 	run()
-	select {
-	case <-p.exit:
-		logs.Warn("stop...")
-	}
+	<-p.exit
+	logs.Warn("stop...")
 	return nil
 }
 

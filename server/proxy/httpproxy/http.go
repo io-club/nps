@@ -210,7 +210,7 @@ func (s *HttpServer) handleProxy(w http.ResponseWriter, r *http.Request) {
 		},
 		Transport: tr,
 		//FlushInterval: 100 * time.Millisecond,
-		BufferPool: &common.CopyBuff,
+		BufferPool: common.BufPoolCopy,
 		ModifyResponse: func(resp *http.Response) error {
 			// CORS
 			if host.AutoCORS {

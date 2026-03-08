@@ -96,7 +96,7 @@ func (s *Conn) closeProcess() {
 	}
 	s.sendWindow.CloseWindow()
 	s.receiveWindow.CloseWindow()
-	return
+	//return
 }
 
 func (s *Conn) LocalAddr() net.Addr {
@@ -276,7 +276,7 @@ func (Self *receiveWindow) calcSize() {
 		Self.count = -10
 	}
 	Self.count += 1
-	return
+	//return
 }
 
 func (Self *receiveWindow) Write(buf []byte, l uint16, part bool, id int32) (err error) {
@@ -354,7 +354,7 @@ copyData:
 	pOff += l
 	Self.off += uint32(l)
 	n += l
-	l = 0
+	//l = 0
 	if Self.off == uint32(Self.element.L) {
 		windowBuff.Put(Self.element.Buf)
 		Self.sendStatus(id, Self.element.L)
@@ -403,7 +403,7 @@ func (Self *receiveWindow) sendStatus(id int32, l uint16) {
 		runtime.Gosched()
 		// another goroutine change remaining or wait status, make sure
 	}
-	return
+	//return
 }
 
 func (Self *receiveWindow) SetTimeOut(t time.Time) {
@@ -654,7 +654,7 @@ func (Self *sendWindow) WriteFull(buf []byte, id int32) (n int, err error) {
 			break
 		}
 		n += int(l)
-		l = 0
+		//l = 0
 		if part {
 			Self.mux.sendInfo(muxNewMsgPart, id, Self.priority, bufSeg)
 		} else {

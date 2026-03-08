@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type Pool[T comparable] struct {
@@ -203,9 +202,9 @@ func (p *Pool[T]) removeAt(i int) {
 	if p.head > lastIdx {
 		p.head = lastIdx
 	}
-	return
+	//return
 }
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	//rand.Seed(time.Now().UnixNano())
 }

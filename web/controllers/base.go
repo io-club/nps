@@ -215,11 +215,9 @@ func (s *BaseController) AjaxTable(list interface{}, cnt int, recordsTotal int, 
 	json := make(map[string]interface{})
 	json["rows"] = list
 	json["total"] = recordsTotal
-	if kwargs != nil {
-		for k, v := range kwargs {
-			if v != nil {
-				json[k] = v
-			}
+	for k, v := range kwargs {
+		if v != nil {
+			json[k] = v
 		}
 	}
 	s.Data["json"] = json
@@ -277,7 +275,7 @@ func (s *BaseController) CheckUserAuth() {
 
 func GetBestBridge(ip string) (bridgeType, bridgeAddr, bridgeIp, bridgePort string) {
 	bridgeIp = common.GetIpByAddr(beego.AppConfig.DefaultString("bridge_addr", ip))
-	if strings.IndexByte(bridgeIp, ':') >= 0 && !(strings.HasPrefix(bridgeIp, "[") && strings.HasSuffix(bridgeIp, "]")) {
+	if strings.IndexByte(bridgeIp, ':') >= 0 && (!strings.HasPrefix(bridgeIp, "[") || !strings.HasSuffix(bridgeIp, "]")) {
 		bridgeIp = "[" + bridgeIp + "]"
 	}
 	bridgeType = beego.AppConfig.String("bridge_type")

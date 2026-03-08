@@ -40,7 +40,7 @@ func (Self *priorityQueue) Push(packager *muxPackager) {
 	//Self.cond.Broadcast()
 	Self.cond.Signal()
 	Self.cond.L.Unlock()
-	return
+	//return
 }
 
 func (Self *priorityQueue) push(packager *muxPackager) {
@@ -159,10 +159,10 @@ func (Self *priorityQueue) Stop() {
 }
 
 type connQueue struct {
-	chain    *bufChain
-	starving uint8
-	stop     uint32
-	cond     *sync.Cond
+	chain *bufChain
+	//starving uint8
+	stop uint32
+	cond *sync.Cond
 }
 
 func (Self *connQueue) New() {
@@ -175,7 +175,7 @@ func (Self *connQueue) New() {
 func (Self *connQueue) Push(connection *Conn) {
 	Self.chain.pushHead(unsafe.Pointer(connection))
 	Self.cond.Broadcast()
-	return
+	//return
 }
 
 func (Self *connQueue) Pop() (connection *Conn) {
@@ -286,7 +286,7 @@ func (Self *receiveWindowQueue) Push(element *listElement) {
 	if wait == 1 {
 		Self.allowPop()
 	}
-	return
+	//return
 }
 
 func (Self *receiveWindowQueue) Pop() (element *listElement, err error) {

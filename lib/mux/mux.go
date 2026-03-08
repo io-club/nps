@@ -163,7 +163,7 @@ func (s *Mux) sendInfo(flag uint8, id int32, priority bool, data interface{}) {
 		return
 	}
 	s.writeQueue.Push(pack)
-	return
+	//return
 }
 
 func (s *Mux) applyWriteBackpressure(flag uint8, priority bool) {
@@ -196,7 +196,7 @@ func (s *Mux) writeSession() {
 		}()
 		for {
 			if s.IsClosed() {
-				break
+				return
 			}
 			pack := s.writeQueue.TryPop()
 			if pack == nil {
@@ -234,7 +234,7 @@ func (s *Mux) writeSession() {
 
 func (s *Mux) ping() {
 	go func() {
-		rand.Seed(time.Now().UnixNano())
+		//rand.Seed(time.Now().UnixNano())
 		buf := make([]byte, 8+PingMaxPad)
 		initialJitter := time.Duration(rand.Int63n(int64(PingJitter))) - PingJitter/2
 		timer := time.NewTimer(PingInterval + initialJitter)
@@ -494,11 +494,11 @@ func (s *Mux) release() {
 		if pack == nil {
 			break
 		}
-		if pack.basePackager.buf != nil {
-			windowBuff.Put(pack.basePackager.buf)
+		if pack.buf != nil {
+			windowBuff.Put(pack.buf)
 		}
-		if pack.basePackager.content != nil {
-			windowBuff.Put(pack.basePackager.content)
+		if pack.content != nil {
+			windowBuff.Put(pack.content)
 		}
 		muxPack.Put(pack)
 	}
@@ -507,7 +507,6 @@ func (s *Mux) release() {
 		if connection == nil {
 			break
 		}
-		connection = nil
 	}
 	s.writeQueue.Stop()
 	s.newConnQueue.Stop()

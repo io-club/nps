@@ -219,6 +219,6 @@ func runDocker(dockerName, networkName, ip, testFunName, nowDir string) error {
 		"-v", "-run", testFunName, "./"))
 }
 
-func stopDocker(dockerName string) error {
-	return runCmd(exec.Command("docker", "stop", dockerName))
-}
+//func stopDocker(dockerName string) error {
+//	return runCmd(exec.Command("docker", "stop", dockerName))
+//}

@@ -27,7 +27,7 @@ const (
 	// minus the IP and UDP headers. IPv4 has a 20 byte header, UDP adds another 4 bytes.
 	// This is a total overhead of 24 bytes. Ethernet's max packet size is 1500 bytes,
 	// 1500 - 24 = 1476.
-	maxUDPPacketSize = 1476
+	//maxUDPPacketSize = 1476
 )
 
 const (
@@ -334,8 +334,8 @@ func (s *TunnelModeServer) handleUDP(c net.Conn) {
 
 	// Local UDP -> tunnel
 	go func() {
-		b := common.BufPoolMax.Get().([]byte)
-		defer common.PutBufPoolMax(b)
+		b := common.BufPool.Get()
+		defer common.BufPool.Put(b)
 
 		for {
 			n, lAddr, err := reply.ReadFromUDP(b)
@@ -380,8 +380,8 @@ func (s *TunnelModeServer) handleUDP(c net.Conn) {
 
 	// Tunnel -> local UDP
 	go func() {
-		b := common.BufPoolMax.Get().([]byte)
-		defer common.PutBufPoolMax(b)
+		b := common.BufPool.Get()
+		defer common.BufPool.Put(b)
 
 		for {
 			n, err := framed.Read(b)
@@ -406,8 +406,8 @@ func (s *TunnelModeServer) handleUDP(c net.Conn) {
 	}()
 
 	// Keep TCP control connection alive until client closes it.
-	b := common.BufPoolMax.Get().([]byte)
-	defer common.PutBufPoolMax(b)
+	b := common.BufPool.Get()
+	defer common.BufPool.Put(b)
 	for {
 		if _, err := c.Read(b); err != nil {
 			_ = flowConn.Close()

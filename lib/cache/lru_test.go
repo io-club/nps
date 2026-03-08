@@ -52,7 +52,7 @@ func TestCacheRemoveAndClearCallOnEvicted(t *testing.T) {
 	if len(evicted) != 2 {
 		t.Fatalf("expected 2 evicted callbacks, got %d (%#v)", len(evicted), evicted)
 	}
-	if !(contains(evicted, "x") && contains(evicted, "y")) {
+	if !contains(evicted, "x") || !contains(evicted, "y") {
 		t.Fatalf("expected evicted keys x and y, got %#v", evicted)
 	}
 }

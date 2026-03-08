@@ -21,40 +21,40 @@ nps.exe -conf_path=D:\test\nps
 ---
 
 ## 1. 基础配置
-| 名称             | 说明             |
-|----------------|----------------|
-| `appname`      | 应用名称           |
-| `runmode`      | 运行模式（dev/pro）  |
+| 名称             | 说明                             |
+|----------------|--------------------------------|
+| `appname`      | 应用名称                           |
+| `runmode`      | 运行模式（dev/pro）                  |
 | `secure_mode`  | 安全模式（默认 `true`，开启后不再兼容旧版客户端连接） |
-| `dns_server`   | DNS 服务器        |
-| `timezone`     | 时区             |
-| `ntp_server`   | NTP 服务器        |
-| `ntp_interval` | NTP 最小查询间隔（分钟） |
+| `dns_server`   | DNS 服务器                        |
+| `timezone`     | 时区                             |
+| `ntp_server`   | NTP 服务器                        |
+| `ntp_interval` | NTP 最小查询间隔（分钟）                 |
 
 ---
 ## 2. Web 管理面板相关
-| 名称                  | 说明                                     |
-|---------------------|----------------------------------------|
-| `web_port`          | Web 管理端口（默认 `8081`）                    |
-| `web_ip`            | Web 管理界面监听地址（默认 `0.0.0.0`，监听所有 IP）     |
-| `web_host`          | Web 界面域名（默认 `a.o.com`，端口复用时访问管理页面的地址）  |
-| `web_username`      | Web 管理员账号（默认 `admin`）                  |
-| `web_password`      | Web 管理员密码（默认 `123`，建议修改！）              |
-| `web_open_ssl`      | 是否启用 Web 面板 HTTPS（默认 `false`，启用需配置证书）  |
-| `web_cert_file`     | Web HTTPS 证书文件路径                       |
-| `web_key_file`      | Web HTTPS 证书密钥文件路径                     |
-| `web_base_url`      | Web 管理主路径（默认 `/`，适用于 Web 反向代理时调整路径）    |
-| `open_captcha`      | 是否启用验证码                                |
-| `pow_bits`          | PoW 验证位数（默认 `20`）                      |
-| `login_ban_time`    | 两次登录请求最小间隔（单位：秒，默认 `5`）                |
-| `login_ip_ban_time` | IP 维度失败次数重置周期（单位：秒，默认 `180`）            |
-| `login_user_ban_time` | 用户名维度失败次数重置周期（单位：秒，默认 `3600`）       |
-| `login_max_fail_times` | 最大允许登录失败次数（默认 `10`）                      |
-| `login_max_body`    | 登录请求体最大大小（单位：字节，默认 `1024`）            |
-| `login_max_skew`    | 时间戳偏移容忍度（单位：毫秒，默认 `300000`，即 5 分钟） |
-| `totp_secret`       | 两步验证密钥 开启后 `web_password` 失效 使用动态验证码登录 |
-| `allow_x_real_ip`   | 允许通过 X-Real-IP 头获取真实IP                 |
-| `trusted_proxy_ips` | 受信任的代理服务器 IP 地址（多个用逗号分隔）               |
+| 名称                     | 说明                                     |
+|------------------------|----------------------------------------|
+| `web_port`             | Web 管理端口（默认 `8081`）                    |
+| `web_ip`               | Web 管理界面监听地址（默认 `0.0.0.0`，监听所有 IP）     |
+| `web_host`             | Web 界面域名（默认 `a.o.com`，端口复用时访问管理页面的地址）  |
+| `web_username`         | Web 管理员账号（默认 `admin`）                  |
+| `web_password`         | Web 管理员密码（默认 `123`，建议修改！）              |
+| `web_open_ssl`         | 是否启用 Web 面板 HTTPS（默认 `false`，启用需配置证书）  |
+| `web_cert_file`        | Web HTTPS 证书文件路径                       |
+| `web_key_file`         | Web HTTPS 证书密钥文件路径                     |
+| `web_base_url`         | Web 管理主路径（默认 `/`，适用于 Web 反向代理时调整路径）    |
+| `open_captcha`         | 是否启用验证码                                |
+| `pow_bits`             | PoW 验证位数（默认 `20`）                      |
+| `login_ban_time`       | 两次登录请求最小间隔（单位：秒，默认 `5`）                |
+| `login_ip_ban_time`    | IP 维度失败次数重置周期（单位：秒，默认 `180`）           |
+| `login_user_ban_time`  | 用户名维度失败次数重置周期（单位：秒，默认 `3600`）          |
+| `login_max_fail_times` | 最大允许登录失败次数（默认 `10`）                    |
+| `login_max_body`       | 登录请求体最大大小（单位：字节，默认 `1024`）             |
+| `login_max_skew`       | 时间戳偏移容忍度（单位：毫秒，默认 `300000`，即 5 分钟）     |
+| `totp_secret`          | 两步验证密钥 开启后 `web_password` 失效 使用动态验证码登录 |
+| `allow_x_real_ip`      | 允许通过 X-Real-IP 头获取真实IP                 |
+| `trusted_proxy_ips`    | 受信任的代理服务器 IP 地址（多个用逗号分隔）               |
 
 ---
 
@@ -70,8 +70,8 @@ nps.exe -conf_path=D:\test\nps
 | `http3_proxy_port`            | HTTP/3 代理监听端口（默认 `https_proxy_port`，配置`0`关闭）                                            |
 | `http_proxy_response_timeout` | HTTP 后端响应头超时（单位 s，默认值 100）                                                              |
 | `force_auto_ssl`              | 强制自动申请证书，需自行解决80、443端口问题（默认 `false`）                                                    |
-| `https_default_cert_file`     | HTTPS 代理默认证书文件路径（用于未单独配置证书的域名）                                                    |
-| `https_default_key_file`      | HTTPS 代理默认私钥文件路径                                                                    |
+| `https_default_cert_file`     | HTTPS 代理默认证书文件路径（用于未单独配置证书的域名）                                                          |
+| `https_default_key_file`      | HTTPS 代理默认私钥文件路径                                                                        |
 | `ssl_path`                    | 自动申请证书保存路径（默认 `ssl`）                                                                    |
 | `ssl_email`                   | 自动申请证书使用的邮箱                                                                             |
 | `ssl_ca`                      | 自动申请证书使用的 CA（`LetsEncrypt`、`ZeroSSL`、`GoogleTrust`，默认 `LetsEncrypt`）                    |
@@ -99,7 +99,7 @@ nps.exe -conf_path=D:\test\nps
 | `bridge_key_file`             | 客户端与服务端通信 TLS 证书密钥文件路径                                                                  |
 | `bridge_http3`                | 客户端与服务端通信允许通过 HTTP/3 端口连接                                                               |
 | `bridge_select_mode`          | 相同`vkey`客户端连接选取模式（主备：`0`/`Primary`/`p`，轮询：`1`/`RoundRobin`/`rr`，随机：`2`/`Random`/`rand`） |
-| `bridge_addr`                 | Web 命令行中展示给客户端的连接地址（留空时自动使用 Web 访问地址）                                               |
+| `bridge_addr`                 | Web 命令行中展示给客户端的连接地址（留空时自动使用 Web 访问地址）                                                   |
 | `quic_alpn`                   | QUIC 握手时允许协商的 ALPN 列表，逗号分隔（默认 `nps`）                                                    |
 | `quic_keep_alive_period`      | QUIC 空闲保活周期（单位：s，默认 `10`）                                                               |
 | `quic_max_idle_timeout`       | QUIC 最大空闲超时时间（单位：秒，默认 `30`）                                                             |
@@ -206,9 +206,9 @@ server {
 ---
 
 ## 10. 调试配置
-| 名称         | 说明                              |
-|------------|---------------------------------|
-| `pprof_ip` | pprof 调试监听 IP（留空或注释表示关闭） |
+| 名称           | 说明                               |
+|--------------|----------------------------------|
+| `pprof_ip`   | pprof 调试监听 IP（留空或注释表示关闭）         |
 | `pprof_port` | pprof 调试监听端口（需与 `pprof_ip` 配合启用） |
 
 ---

@@ -16,12 +16,12 @@ func NewTimeoutConn(c net.Conn, idle time.Duration) net.Conn {
 }
 
 func (c *TimeoutConn) Read(b []byte) (int, error) {
-	_ = c.Conn.SetDeadline(time.Now().Add(c.idleTimeout))
+	_ = c.SetDeadline(time.Now().Add(c.idleTimeout))
 	return c.Conn.Read(b)
 }
 
 func (c *TimeoutConn) Write(b []byte) (int, error) {
-	_ = c.Conn.SetDeadline(time.Now().Add(c.idleTimeout))
+	_ = c.SetDeadline(time.Now().Add(c.idleTimeout))
 	return c.Conn.Write(b)
 }
 

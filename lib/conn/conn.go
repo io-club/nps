@@ -83,7 +83,7 @@ func (s *Conn) readRequest(buf []byte) (n int, err error) {
 }
 
 // GetHost get host 、connection type、method...from connection
-func (s *Conn) GetHost() (method, address string, rb []byte, err error, r *http.Request) {
+func (s *Conn) GetHost() (method, address string, rb []byte, r *http.Request, err error) {
 	var b [32 * 1024]byte
 	var n int
 	if n, err = s.readRequest(b[:]); err != nil {
@@ -229,8 +229,8 @@ func (s *Conn) GetHealthInfo() (info string, status bool, err error) {
 	if err != nil {
 		return
 	}
-	buf := common.BufPoolMax.Get().([]byte)
-	defer common.PutBufPoolMax(buf)
+	buf := common.BufPool.Get()
+	defer common.BufPool.Put(buf)
 	_, err = s.ReadLen(l, buf)
 	if err != nil {
 		return
@@ -301,8 +301,8 @@ func (s *Conn) SendInfo(t interface{}, flag string) (int, error) {
 // get task info
 func (s *Conn) getInfo(t interface{}) (err error) {
 	var l int
-	buf := common.BufPoolMax.Get().([]byte)
-	defer common.PutBufPoolMax(buf)
+	buf := common.BufPool.Get()
+	defer common.BufPool.Put(buf)
 	if l, err = s.GetLen(); err != nil {
 		return
 	} else if _, err = s.ReadLen(l, buf); err != nil {

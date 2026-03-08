@@ -186,16 +186,17 @@ func GetHostByName(hostname string) string {
 	if !DomainCheck(hostname) {
 		return hostname
 	}
-	ips, _ := net.LookupIP(hostname)
-	if ips != nil {
-		for _, v := range ips {
-			if v.To4() != nil {
-				return v.String()
-			}
-			// If IPv4 not found, return IPv6
-			if v.To16() != nil {
-				return v.String()
-			}
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		return ""
+	}
+	for _, v := range ips {
+		if v.To4() != nil {
+			return v.String()
+		}
+		// If IPv4 not found, return IPv6
+		if v.To16() != nil {
+			return v.String()
 		}
 	}
 	return ""
@@ -617,8 +618,8 @@ func IsBlackIp(ipPort, vkey string, blackIpList []string) bool {
 }
 
 func CopyBuffer(dst io.Writer, src io.Reader, label ...string) (written int64, err error) {
-	buf := CopyBuff.Get()
-	defer CopyBuff.Put(buf)
+	buf := BufPoolCopy.Get()
+	defer BufPoolCopy.Put(buf)
 	for {
 		nr, er := src.Read(buf)
 		//if len(pr)>0 && pr[0] && nr > 50 {
@@ -993,12 +994,13 @@ func IsValidIP(ip string) bool {
 	return parsedIP != nil
 }
 
-func IsPublicIP(IP net.IP) bool {
-	if IP.IsLoopback() || IP.IsLinkLocalMulticast() || IP.IsLinkLocalUnicast() {
+func IsPublicIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() {
 		return false
 	}
-	if ip4 := IP.To4(); ip4 != nil {
-		switch true {
+
+	if ip4 := ip.To4(); ip4 != nil {
+		switch {
 		case ip4[0] == 10:
 			return false
 		case ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31:
@@ -1009,13 +1011,12 @@ func IsPublicIP(IP net.IP) bool {
 			return true
 		}
 	}
-	// Check for IPv6 private addresses
-	if ip6 := IP.To16(); ip6 != nil {
-		if ip6.IsPrivate() {
-			return false
-		}
-		return true
+
+	// IPv6
+	if ip6 := ip.To16(); ip6 != nil {
+		return !ip6.IsPrivate()
 	}
+
 	return false
 }
 

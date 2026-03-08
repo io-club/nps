@@ -73,7 +73,7 @@ func (pMux *PortMux) Start() error {
 	}
 	go func() {
 		for {
-			conn, err := pMux.Listener.Accept()
+			conn, err := pMux.Accept()
 			if err != nil {
 				logs.Warn("%v", err)
 				// close and stop processing when listener is no longer available.
@@ -237,35 +237,35 @@ func parseHostHeader(line []byte) (string, bool) {
 
 func (pMux *PortMux) GetClientListener() net.Listener {
 	pMux.clientConn = make(chan *PortConn)
-	return NewPortListener(pMux.clientConn, pMux.Listener.Addr())
+	return NewPortListener(pMux.clientConn, pMux.Addr())
 }
 
 func (pMux *PortMux) GetClientTlsListener() net.Listener {
 	pMux.clientTlsConn = make(chan *PortConn)
-	return NewPortListener(pMux.clientTlsConn, pMux.Listener.Addr())
+	return NewPortListener(pMux.clientTlsConn, pMux.Addr())
 }
 
 func (pMux *PortMux) GetClientWsListener() net.Listener {
 	pMux.clientWsConn = make(chan *PortConn)
-	return NewPortListener(pMux.clientWsConn, pMux.Listener.Addr())
+	return NewPortListener(pMux.clientWsConn, pMux.Addr())
 }
 
 func (pMux *PortMux) GetClientWssListener() net.Listener {
 	pMux.clientWssConn = make(chan *PortConn)
-	return NewPortListener(pMux.clientWssConn, pMux.Listener.Addr())
+	return NewPortListener(pMux.clientWssConn, pMux.Addr())
 }
 
 func (pMux *PortMux) GetHttpListener() net.Listener {
 	pMux.httpConn = make(chan *PortConn)
-	return NewPortListener(pMux.httpConn, pMux.Listener.Addr())
+	return NewPortListener(pMux.httpConn, pMux.Addr())
 }
 
 func (pMux *PortMux) GetHttpsListener() net.Listener {
 	pMux.httpsConn = make(chan *PortConn)
-	return NewPortListener(pMux.httpsConn, pMux.Listener.Addr())
+	return NewPortListener(pMux.httpsConn, pMux.Addr())
 }
 
 func (pMux *PortMux) GetManagerListener() net.Listener {
 	pMux.managerConn = make(chan *PortConn)
-	return NewPortListener(pMux.managerConn, pMux.Listener.Addr())
+	return NewPortListener(pMux.managerConn, pMux.Addr())
 }

@@ -54,6 +54,7 @@ func (s *DbUtils) GetClientList(start, length int, search, sort, order string, c
 	list := make([]*Client, 0)
 	var cnt int
 	originLength := length
+	id := common.GetIntNoErrByStr(search)
 	keys := GetMapKeys(&s.JsonDb.Clients, true, sort, order)
 	for _, key := range keys {
 		if value, ok := s.JsonDb.Clients.Load(key); ok {
@@ -64,7 +65,7 @@ func (s *DbUtils) GetClientList(start, length int, search, sort, order string, c
 			if clientId != 0 && clientId != v.Id {
 				continue
 			}
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || common.ContainsFold(v.VerifyKey, search) || common.ContainsFold(v.Remark, search)) {
+			if search != "" && v.Id != id && !common.ContainsFold(v.VerifyKey, search) && !common.ContainsFold(v.Remark, search) {
 				continue
 			}
 			cnt++
@@ -340,11 +341,12 @@ func (s *DbUtils) GetHost(start, length int, id int, search string) ([]*Host, in
 	list := make([]*Host, 0)
 	var cnt int
 	originLength := length
+	searchId := common.GetIntNoErrByStr(search)
 	keys := GetMapKeys(&s.JsonDb.Hosts, false, "", "")
 	for _, key := range keys {
 		if value, ok := s.JsonDb.Hosts.Load(key); ok {
 			v := value.(*Host)
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || common.ContainsFold(v.Host, search) || common.ContainsFold(v.Remark, search) || common.ContainsFold(v.Client.VerifyKey, search)) {
+			if search != "" && v.Id != searchId && !common.ContainsFold(v.Host, search) && !common.ContainsFold(v.Remark, search) && !common.ContainsFold(v.Client.VerifyKey, search) {
 				continue
 			}
 			if id == 0 || v.Client.Id == id {

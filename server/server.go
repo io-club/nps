@@ -128,7 +128,9 @@ func DealBridgeTask() {
 						allowLocalProxy := beego.AppConfig.DefaultBool("allow_local_proxy", false)
 						allowSecretLink := beego.AppConfig.DefaultBool("allow_secret_link", false)
 						allowSecretLocal := beego.AppConfig.DefaultBool("allow_secret_local", false)
-						go proxy.NewSecretServer(Bridge, t, allowLocalProxy, allowSecretLink, allowSecretLocal).HandleSecret(s.Conn)
+						go func() {
+							_ = proxy.NewSecretServer(Bridge, t, allowLocalProxy, allowSecretLink, allowSecretLocal).HandleSecret(s.Conn)
+						}()
 					} else {
 						_ = s.Conn.Close()
 						logs.Trace("This key %s cannot be processed,status is close", s.Password)
@@ -155,7 +157,7 @@ func StartNewServer(bridgePort int, cnf *file.Tunnel, bridgeType string, bridgeD
 		for i := 0; i < 3; i++ {
 			port := p + i
 			if common.TestUdpPort(port) {
-				go proxy.NewP2PServer(port).Start()
+				go func(pp int) { _ = proxy.NewP2PServer(pp).Start() }(port)
 				logs.Info("Started P2P Server on port %d", port)
 			} else {
 				logs.Error("Port %d is unavailable.", port)
@@ -179,11 +181,8 @@ func StartNewServer(bridgePort int, cnf *file.Tunnel, bridgeType string, bridgeD
 func dealClientFlow() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			dealClientData()
-		}
+	for range ticker.C {
+		dealClientData()
 	}
 }
 
@@ -335,9 +334,10 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string, s
 	list := make([]*file.Tunnel, 0)
 	originLength := length
 	var cnt int
+
 	keys := file.GetMapKeys(&file.GetDb().JsonDb.Tasks, false, "", "")
 
-	//get all Tunnel and sort
+	// get all Tunnel and filter
 	for _, key := range keys {
 		if value, ok := file.GetDb().JsonDb.Tasks.Load(key); ok {
 			v := value.(*file.Tunnel)
@@ -347,102 +347,119 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string, s
 			allList = append(allList, v)
 		}
 	}
-	//sort by Id, Remark, TargetStr, Port, asc or desc
-	if sortField == "Id" {
+
+	// sort by field, asc or desc
+	switch sortField {
+	case "Id":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Id < allList[j].Id })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Id > allList[j].Id })
 		}
-	} else if sortField == "Client.Id" {
+
+	case "Client.Id":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Client.Id < allList[j].Client.Id })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Client.Id > allList[j].Client.Id })
 		}
-	} else if sortField == "Remark" {
+
+	case "Remark":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Remark < allList[j].Remark })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Remark > allList[j].Remark })
 		}
-	} else if sortField == "Client.VerifyKey" {
+
+	case "Client.VerifyKey":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Client.VerifyKey < allList[j].Client.VerifyKey })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Client.VerifyKey > allList[j].Client.VerifyKey })
 		}
-	} else if sortField == "Target.TargetStr" {
+
+	case "Target.TargetStr":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Target.TargetStr < allList[j].Target.TargetStr })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Target.TargetStr > allList[j].Target.TargetStr })
 		}
-	} else if sortField == "Port" {
+
+	case "Port":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Port < allList[j].Port })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Port > allList[j].Port })
 		}
-	} else if sortField == "Mode" {
+
+	case "Mode":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Mode < allList[j].Mode })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Mode > allList[j].Mode })
 		}
-	} else if sortField == "TargetType" {
+
+	case "TargetType":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].TargetType < allList[j].TargetType })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].TargetType > allList[j].TargetType })
 		}
-	} else if sortField == "Password" {
+
+	case "Password":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Password < allList[j].Password })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Password > allList[j].Password })
 		}
-	} else if sortField == "HttpProxy" {
+
+	case "HttpProxy":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].HttpProxy && !allList[j].HttpProxy })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return !allList[i].HttpProxy && allList[j].HttpProxy })
 		}
-	} else if sortField == "Socks5Proxy" {
+
+	case "Socks5Proxy":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Socks5Proxy && !allList[j].Socks5Proxy })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return !allList[i].Socks5Proxy && allList[j].Socks5Proxy })
 		}
-	} else if sortField == "NowConn" {
+
+	case "NowConn":
 		if order == "asc" {
-			sort.SliceStable(list, func(i, j int) bool { return list[i].NowConn < list[j].NowConn })
+			sort.SliceStable(allList, func(i, j int) bool { return allList[i].NowConn < allList[j].NowConn })
 		} else {
-			sort.SliceStable(list, func(i, j int) bool { return list[i].NowConn > list[j].NowConn })
+			sort.SliceStable(allList, func(i, j int) bool { return allList[i].NowConn > allList[j].NowConn })
 		}
-	} else if sortField == "InletFlow" {
+
+	case "InletFlow":
 		if order == "asc" {
-			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.InletFlow < list[j].Flow.InletFlow })
+			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Flow.InletFlow < allList[j].Flow.InletFlow })
 		} else {
-			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.InletFlow > list[j].Flow.InletFlow })
+			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Flow.InletFlow > allList[j].Flow.InletFlow })
 		}
-	} else if sortField == "ExportFlow" {
+
+	case "ExportFlow":
 		if order == "asc" {
-			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.ExportFlow < list[j].Flow.ExportFlow })
+			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Flow.ExportFlow < allList[j].Flow.ExportFlow })
 		} else {
-			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.ExportFlow > list[j].Flow.ExportFlow })
+			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Flow.ExportFlow > allList[j].Flow.ExportFlow })
 		}
-	} else if sortField == "TotalFlow" {
+
+	case "TotalFlow":
 		if order == "asc" {
-			sort.SliceStable(list, func(i, j int) bool {
-				return list[i].Flow.InletFlow+list[i].Flow.ExportFlow < list[j].Flow.InletFlow+list[j].Flow.ExportFlow
+			sort.SliceStable(allList, func(i, j int) bool {
+				return allList[i].Flow.InletFlow+allList[i].Flow.ExportFlow < allList[j].Flow.InletFlow+allList[j].Flow.ExportFlow
 			})
 		} else {
-			sort.SliceStable(list, func(i, j int) bool {
-				return list[i].Flow.InletFlow+list[i].Flow.ExportFlow > list[j].Flow.InletFlow+list[j].Flow.ExportFlow
+			sort.SliceStable(allList, func(i, j int) bool {
+				return allList[i].Flow.InletFlow+allList[i].Flow.ExportFlow > allList[j].Flow.InletFlow+allList[j].Flow.ExportFlow
 			})
 		}
-	} else if sortField == "FlowRemain" {
+
+	case "FlowRemain":
 		asc := order == "asc"
 		const mb = int64(1024 * 1024)
 		rem := func(f *file.Flow) int64 {
@@ -454,44 +471,49 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string, s
 			}
 			return f.FlowLimit*mb - (f.InletFlow + f.ExportFlow)
 		}
-		sort.SliceStable(list, func(i, j int) bool {
-			ri, rj := rem(list[i].Flow), rem(list[j].Flow)
+		sort.SliceStable(allList, func(i, j int) bool {
+			ri, rj := rem(allList[i].Flow), rem(allList[j].Flow)
 			if asc {
 				return ri < rj
 			}
 			return ri > rj
 		})
-	} else if sortField == "Flow.FlowLimit" {
+
+	case "Flow.FlowLimit":
 		if order == "asc" {
-			sort.SliceStable(list, func(i, j int) bool {
-				vi, vj := list[i].Flow.FlowLimit, list[j].Flow.FlowLimit
+			sort.SliceStable(allList, func(i, j int) bool {
+				vi, vj := allList[i].Flow.FlowLimit, allList[j].Flow.FlowLimit
 				return (vi != 0 && vj == 0) || (vi != 0 && vj != 0 && vi < vj)
 			})
 		} else {
-			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.FlowLimit > list[j].Flow.FlowLimit })
+			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Flow.FlowLimit > allList[j].Flow.FlowLimit })
 		}
-	} else if sortField == "Flow.TimeLimit" || sortField == "TimeRemain" {
+
+	case "Flow.TimeLimit", "TimeRemain":
 		if order == "asc" {
-			sort.SliceStable(list, func(i, j int) bool {
-				ti, tj := list[i].Flow.TimeLimit, list[j].Flow.TimeLimit
+			sort.SliceStable(allList, func(i, j int) bool {
+				ti, tj := allList[i].Flow.TimeLimit, allList[j].Flow.TimeLimit
 				return (!ti.IsZero() && tj.IsZero()) || (!ti.IsZero() && !tj.IsZero() && ti.Before(tj))
 			})
 		} else {
-			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.TimeLimit.After(list[j].Flow.TimeLimit) })
+			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Flow.TimeLimit.After(allList[j].Flow.TimeLimit) })
 		}
-	} else if sortField == "Status" {
+
+	case "Status":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Status && !allList[j].Status })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return !allList[i].Status && allList[j].Status })
 		}
-	} else if sortField == "RunStatus" {
+
+	case "RunStatus":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].RunStatus && !allList[j].RunStatus })
 		} else {
 			sort.SliceStable(allList, func(i, j int) bool { return !allList[i].RunStatus && allList[j].RunStatus })
 		}
-	} else if sortField == "Client.IsConnect" {
+
+	case "Client.IsConnect":
 		if order == "asc" {
 			sort.SliceStable(allList, func(i, j int) bool { return allList[i].Client.IsConnect && !allList[j].Client.IsConnect })
 		} else {
@@ -499,170 +521,192 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string, s
 		}
 	}
 
-	//search
-	for _, key := range allList {
-		if value, ok := file.GetDb().JsonDb.Tasks.Load(key.Id); ok {
-			v := value.(*file.Tunnel)
-			if (typeVal != "" && v.Mode != typeVal || (clientId != 0 && v.Client.Id != clientId)) || (typeVal == "" && clientId != v.Client.Id) {
-				continue
-			}
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || v.Port == common.GetIntNoErrByStr(search) || common.ContainsFold(v.Password, search) || common.ContainsFold(v.Remark, search) || common.ContainsFold(v.Target.TargetStr, search)) {
-				continue
-			}
-			cnt++
-			if _, ok := Bridge.Client.Load(v.Client.Id); ok {
-				v.Client.IsConnect = true
-			} else {
-				v.Client.IsConnect = false
-			}
-			if start--; start < 0 {
-				if originLength == 0 {
-					if _, ok := RunList.Load(v.Id); ok {
-						v.RunStatus = true
-					} else {
-						v.RunStatus = false
-					}
-					list = append(list, v)
-				} else if length--; length >= 0 {
-					//if _, ok := RunList[v.Id]; ok {
-					if _, ok := RunList.Load(v.Id); ok {
-						v.RunStatus = true
-					} else {
-						v.RunStatus = false
-					}
-					list = append(list, v)
-				}
+	searchInt := common.GetIntNoErrByStr(search)
+
+	// search + paging
+	for _, v := range allList {
+		if search != "" &&
+			v.Id != searchInt &&
+			v.Port != searchInt &&
+			!common.ContainsFold(v.Password, search) &&
+			!common.ContainsFold(v.Remark, search) &&
+			!common.ContainsFold(v.Target.TargetStr, search) {
+			continue
+		}
+
+		cnt++
+
+		if _, ok := Bridge.Client.Load(v.Client.Id); ok {
+			v.Client.IsConnect = true
+		} else {
+			v.Client.IsConnect = false
+		}
+
+		if _, ok := RunList.Load(v.Id); ok {
+			v.RunStatus = true
+		} else {
+			v.RunStatus = false
+		}
+
+		if start--; start < 0 {
+			if originLength == 0 {
+				list = append(list, v)
+			} else if length--; length >= 0 {
+				list = append(list, v)
 			}
 		}
 	}
+
 	return list, cnt
 }
 
 // GetHostList get client list
 func GetHostList(start, length, clientId int, search, sortField, order string) (list []*file.Host, cnt int) {
 	list, cnt = file.GetDb().GetHost(start, length, clientId, search)
-	//sort by Id, Remark..., asc or desc
-	if sortField == "Id" {
+
+	// sort by field, asc or desc
+	switch sortField {
+	case "Id":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Id < list[j].Id })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Id > list[j].Id })
 		}
-	} else if sortField == "Client.Id" {
+
+	case "Client.Id":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Client.Id < list[j].Client.Id })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Client.Id > list[j].Client.Id })
 		}
-	} else if sortField == "Remark" {
+
+	case "Remark":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Remark < list[j].Remark })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Remark > list[j].Remark })
 		}
-	} else if sortField == "Client.VerifyKey" {
+
+	case "Client.VerifyKey":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Client.VerifyKey < list[j].Client.VerifyKey })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Client.VerifyKey > list[j].Client.VerifyKey })
 		}
-	} else if sortField == "Host" {
+
+	case "Host":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Host < list[j].Host })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Host > list[j].Host })
 		}
-	} else if sortField == "Scheme" {
+
+	case "Scheme":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Scheme < list[j].Scheme })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Scheme > list[j].Scheme })
 		}
-	} else if sortField == "TargetIsHttps" {
+
+	case "TargetIsHttps":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].TargetIsHttps && !list[j].TargetIsHttps })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].TargetIsHttps && list[j].TargetIsHttps })
 		}
-	} else if sortField == "Target.TargetStr" {
+
+	case "Target.TargetStr":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Target.TargetStr < list[j].Target.TargetStr })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Target.TargetStr > list[j].Target.TargetStr })
 		}
-	} else if sortField == "Location" {
+
+	case "Location":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Location < list[j].Location })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Location > list[j].Location })
 		}
-	} else if sortField == "PathRewrite" {
+
+	case "PathRewrite":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].PathRewrite < list[j].PathRewrite })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].PathRewrite > list[j].PathRewrite })
 		}
-	} else if sortField == "CertType" {
+
+	case "CertType":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].CertType < list[j].CertType })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].CertType > list[j].CertType })
 		}
-	} else if sortField == "AutoSSL" {
+
+	case "AutoSSL":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].AutoSSL && !list[j].AutoSSL })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].AutoSSL && list[j].AutoSSL })
 		}
-	} else if sortField == "AutoHttps" {
+
+	case "AutoHttps":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].AutoHttps && !list[j].AutoHttps })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].AutoHttps && list[j].AutoHttps })
 		}
-	} else if sortField == "AutoCORS" {
+
+	case "AutoCORS":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].AutoCORS && !list[j].AutoCORS })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].AutoCORS && list[j].AutoCORS })
 		}
-	} else if sortField == "CompatMode" {
+
+	case "CompatMode":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].CompatMode && !list[j].CompatMode })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].CompatMode && list[j].CompatMode })
 		}
-	} else if sortField == "HttpsJustProxy" {
+
+	case "HttpsJustProxy":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].HttpsJustProxy && !list[j].HttpsJustProxy })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].HttpsJustProxy && list[j].HttpsJustProxy })
 		}
-	} else if sortField == "TlsOffload" {
+
+	case "TlsOffload":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].TlsOffload && !list[j].TlsOffload })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].TlsOffload && list[j].TlsOffload })
 		}
-	} else if sortField == "NowConn" {
+
+	case "NowConn":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].NowConn < list[j].NowConn })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].NowConn > list[j].NowConn })
 		}
-	} else if sortField == "InletFlow" {
+
+	case "InletFlow":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.InletFlow < list[j].Flow.InletFlow })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.InletFlow > list[j].Flow.InletFlow })
 		}
-	} else if sortField == "ExportFlow" {
+
+	case "ExportFlow":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.ExportFlow < list[j].Flow.ExportFlow })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.ExportFlow > list[j].Flow.ExportFlow })
 		}
-	} else if sortField == "TotalFlow" {
+
+	case "TotalFlow":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool {
 				return list[i].Flow.InletFlow+list[i].Flow.ExportFlow < list[j].Flow.InletFlow+list[j].Flow.ExportFlow
@@ -672,7 +716,8 @@ func GetHostList(start, length, clientId int, search, sortField, order string) (
 				return list[i].Flow.InletFlow+list[i].Flow.ExportFlow > list[j].Flow.InletFlow+list[j].Flow.ExportFlow
 			})
 		}
-	} else if sortField == "FlowRemain" {
+
+	case "FlowRemain":
 		asc := order == "asc"
 		const mb = int64(1024 * 1024)
 		rem := func(f *file.Flow) int64 {
@@ -691,7 +736,8 @@ func GetHostList(start, length, clientId int, search, sortField, order string) (
 			}
 			return ri > rj
 		})
-	} else if sortField == "Flow.FlowLimit" {
+
+	case "Flow.FlowLimit":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool {
 				vi, vj := list[i].Flow.FlowLimit, list[j].Flow.FlowLimit
@@ -700,7 +746,8 @@ func GetHostList(start, length, clientId int, search, sortField, order string) (
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.FlowLimit > list[j].Flow.FlowLimit })
 		}
-	} else if sortField == "Flow.TimeLimit" || sortField == "TimeRemain" {
+
+	case "Flow.TimeLimit", "TimeRemain":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool {
 				ti, tj := list[i].Flow.TimeLimit, list[j].Flow.TimeLimit
@@ -709,57 +756,67 @@ func GetHostList(start, length, clientId int, search, sortField, order string) (
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.TimeLimit.After(list[j].Flow.TimeLimit) })
 		}
-	} else if sortField == "IsClose" {
+
+	case "IsClose":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].IsClose && !list[j].IsClose })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].IsClose && list[j].IsClose })
 		}
-	} else if sortField == "Client.IsConnect" {
+
+	case "Client.IsConnect":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Client.IsConnect && !list[j].Client.IsConnect })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].Client.IsConnect && list[j].Client.IsConnect })
 		}
 	}
+
 	return
 }
 
 // GetClientList get client list
 func GetClientList(start, length int, search, sortField, order string, clientId int) (list []*file.Client, cnt int) {
 	list, cnt = file.GetDb().GetClientList(start, length, search, sortField, order, clientId)
-	//sort by Id, Remark, Port..., asc or desc
-	if sortField == "Id" {
+
+	// sort by Id, Remark, Port..., asc or desc
+	switch sortField {
+	case "Id":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Id < list[j].Id })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Id > list[j].Id })
 		}
-	} else if sortField == "Addr" {
+
+	case "Addr":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Addr < list[j].Addr })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Addr > list[j].Addr })
 		}
-	} else if sortField == "LocalAddr" {
+
+	case "LocalAddr":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].LocalAddr < list[j].LocalAddr })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].LocalAddr > list[j].LocalAddr })
 		}
-	} else if sortField == "Remark" {
+
+	case "Remark":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Remark < list[j].Remark })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Remark > list[j].Remark })
 		}
-	} else if sortField == "VerifyKey" {
+
+	case "VerifyKey":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].VerifyKey < list[j].VerifyKey })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].VerifyKey > list[j].VerifyKey })
 		}
-	} else if sortField == "TotalFlow" {
+
+	case "TotalFlow":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool {
 				return list[i].Flow.InletFlow+list[i].Flow.ExportFlow < list[j].Flow.InletFlow+list[j].Flow.ExportFlow
@@ -769,7 +826,8 @@ func GetClientList(start, length int, search, sortField, order string, clientId 
 				return list[i].Flow.InletFlow+list[i].Flow.ExportFlow > list[j].Flow.InletFlow+list[j].Flow.ExportFlow
 			})
 		}
-	} else if sortField == "FlowRemain" {
+
+	case "FlowRemain":
 		asc := order == "asc"
 		const mb = int64(1024 * 1024)
 		rem := func(f *file.Flow) int64 {
@@ -788,31 +846,36 @@ func GetClientList(start, length int, search, sortField, order string, clientId 
 			}
 			return ri > rj
 		})
-	} else if sortField == "NowConn" {
+
+	case "NowConn":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].NowConn < list[j].NowConn })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].NowConn > list[j].NowConn })
 		}
-	} else if sortField == "Version" {
+
+	case "Version":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Version < list[j].Version })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Version > list[j].Version })
 		}
-	} else if sortField == "Mode" {
+
+	case "Mode":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Mode < list[j].Mode })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Mode > list[j].Mode })
 		}
-	} else if sortField == "Rate.NowRate" {
+
+	case "Rate.NowRate":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Rate.Now() < list[j].Rate.Now() })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Rate.Now() > list[j].Rate.Now() })
 		}
-	} else if sortField == "Flow.FlowLimit" {
+
+	case "Flow.FlowLimit":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool {
 				vi, vj := list[i].Flow.FlowLimit, list[j].Flow.FlowLimit
@@ -821,7 +884,8 @@ func GetClientList(start, length int, search, sortField, order string, clientId 
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.FlowLimit > list[j].Flow.FlowLimit })
 		}
-	} else if sortField == "Flow.TimeLimit" || sortField == "TimeRemain" {
+
+	case "Flow.TimeLimit", "TimeRemain":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool {
 				ti, tj := list[i].Flow.TimeLimit, list[j].Flow.TimeLimit
@@ -830,19 +894,22 @@ func GetClientList(start, length int, search, sortField, order string, clientId 
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Flow.TimeLimit.After(list[j].Flow.TimeLimit) })
 		}
-	} else if sortField == "Status" {
+
+	case "Status":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Status && !list[j].Status })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].Status && list[j].Status })
 		}
-	} else if sortField == "IsConnect" {
+
+	case "IsConnect":
 		if order == "asc" {
 			sort.SliceStable(list, func(i, j int) bool { return list[i].IsConnect && !list[j].IsConnect })
 		} else {
 			sort.SliceStable(list, func(i, j int) bool { return !list[i].IsConnect && list[j].IsConnect })
 		}
 	}
+
 	dealClientData()
 	return
 }
@@ -906,7 +973,7 @@ func dealClientData() {
 		c.ExportFlow += t.Flow.ExportFlow
 		return true
 	})
-	return
+	//return
 }
 
 // DelTunnelAndHostByClientId delete all host and tasks by client id
@@ -999,7 +1066,7 @@ func startSpeedSampler() {
 func InitDashboardData() {
 	startSpeedSampler()
 	GetDashboardData(true)
-	return
+	//return
 }
 
 func GetDashboardData(force bool) map[string]interface{} {

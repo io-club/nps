@@ -3,6 +3,7 @@ package conn
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"testing"
@@ -58,8 +59,8 @@ func TestIsTempOrTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsTempOrTimeout(tt.err); got != tt.want {
-				t.Fatalf("IsTempOrTimeout(%v) = %v, want %v", tt.err, got, tt.want)
+			if got := IsTimeout(tt.err); got != tt.want {
+				t.Fatalf("IsTimeout(%v) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
 	}
@@ -97,7 +98,7 @@ func TestReadACKUnexpectedValue(t *testing.T) {
 	if err == nil {
 		t.Fatal("ReadACK() error = nil, want non-nil")
 	}
-	if err != io.ErrUnexpectedEOF {
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("ReadACK() error = %v, want %v", err, io.ErrUnexpectedEOF)
 	}
 	if err := <-errCh; err != nil {

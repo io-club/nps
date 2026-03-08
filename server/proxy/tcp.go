@@ -120,7 +120,7 @@ func ProcessTunnel(c *conn.Conn, s *TunnelModeServer) error {
 
 // ProcessHttp http proxy
 func ProcessHttp(c *conn.Conn, s *TunnelModeServer) error {
-	_, addr, rb, err, r := c.GetHost()
+	_, addr, rb, r, err := c.GetHost()
 	if err != nil {
 		_ = c.Close()
 		logs.Info("%v", err)

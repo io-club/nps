@@ -1,7 +1,6 @@
 package tool
 
 import (
-	"math/rand"
 	"testing"
 )
 
@@ -143,7 +142,7 @@ func TestTestServerPortShortCircuitAndValidation(t *testing.T) {
 
 func TestGenerateServerPortWithAllowList(t *testing.T) {
 	withPorts(t, []int{0, 10001, 10002})
-	rand.Seed(1)
+	//rand.Seed(1)
 
 	got := GenerateServerPort("p2p")
 	if got != 10001 && got != 10002 {
@@ -160,7 +159,7 @@ func TestGenerateServerPortWithOnlyZeroAllowList(t *testing.T) {
 
 func TestGenerateServerPortWithoutAllowListUsesDynamicRange(t *testing.T) {
 	withPorts(t, nil)
-	rand.Seed(1)
+	//rand.Seed(1)
 
 	got := GenerateServerPort("p2p")
 	if got < 1024 || got > 65535 {

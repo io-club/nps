@@ -115,6 +115,8 @@ func DecryptWithPrivateKey(base64Cipher string) ([]byte, error) {
 		return nil, fmt.Errorf("base64 decode error: %w", err)
 	}
 	// Decrypt using PKCS#1 v1.5
+	//nolint:staticcheck // legacy PKCS1v15 compatibility
+	//lint:ignore SA1019 legacy PKCS1v15 compatibility
 	plain, err := rsa.DecryptPKCS1v15(rand.Reader, rsaKey, cipherBytes)
 	if err != nil {
 		return nil, fmt.Errorf("RSA decrypt error: %w", err)

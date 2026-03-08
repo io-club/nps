@@ -9,7 +9,6 @@ import (
 	"math"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
@@ -99,8 +98,7 @@ func writeResult(values []float64, outfile string) error {
 	defer func() { _ = file.Close() }()
 	writer := bufio.NewWriter(file)
 	for _, v := range values {
-		_, _ = writer.WriteString(fmt.Sprintf("%.2f", v))
-		_, _ = writer.WriteString("\n")
+		_, _ = fmt.Fprintf(writer, "%.2f\n", v)
 		_ = writer.Flush()
 	}
 	return err
@@ -115,8 +113,7 @@ func appendResult(values []float64, outfile string) error {
 	defer func() { _ = file.Close() }()
 	writer := bufio.NewWriter(file)
 	for _, v := range values {
-		_, _ = writer.WriteString(fmt.Sprintf("%.2f", v))
-		_, _ = writer.WriteString("\n")
+		_, _ = fmt.Fprintf(writer, "%.2f\n", v)
 		_ = writer.Flush()
 	}
 	return err
@@ -170,16 +167,14 @@ func TestServer(t *testing.T) {
 					mux.bw.Get() / 1024 / 1024,
 					math.Float64frombits(atomic.LoadUint64(&mux.latency)),
 				}, serverResultFileName)
-				ticker := time.NewTicker(time.Second * 1)
-				for {
-					select {
-					case <-ticker.C:
-						fmt.Println(mux.bw.Get()/1024/1024, math.Float64frombits(atomic.LoadUint64(&mux.latency)))
-						_ = appendResult([]float64{
-							mux.bw.Get() / 1024 / 1024,
-							math.Float64frombits(atomic.LoadUint64(&mux.latency)),
-						}, serverResultFileName)
-					}
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+				for range ticker.C {
+					fmt.Println(mux.bw.Get()/1024/1024, math.Float64frombits(atomic.LoadUint64(&mux.latency)))
+					_ = appendResult([]float64{
+						mux.bw.Get() / 1024 / 1024,
+						math.Float64frombits(atomic.LoadUint64(&mux.latency)),
+					}, serverResultFileName)
 				}
 			}()
 			_, _ = io.Copy(clientConn, userConn)
@@ -224,15 +219,13 @@ func TestClient(t *testing.T) {
 					mux.bw.Get() / 1024 / 1024,
 					math.Float64frombits(atomic.LoadUint64(&mux.latency)),
 				}, clientResultFileName)
-				ticker := time.NewTicker(time.Second * 1)
-				for {
-					select {
-					case <-ticker.C:
-						_ = appendResult([]float64{
-							mux.bw.Get() / 1024 / 1024,
-							math.Float64frombits(atomic.LoadUint64(&mux.latency)),
-						}, clientResultFileName)
-					}
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+				for range ticker.C {
+					_ = appendResult([]float64{
+						mux.bw.Get() / 1024 / 1024,
+						math.Float64frombits(atomic.LoadUint64(&mux.latency)),
+					}, clientResultFileName)
 				}
 			}()
 			_, _ = io.Copy(appConn, userConn)
@@ -275,7 +268,7 @@ func TestApp(t *testing.T) {
 				}
 			}
 			// send bandwidth
-			writeBw := float64(dataSize/1024/1024) / time.Now().Sub(startTime).Seconds()
+			writeBw := float64(dataSize/1024/1024) / time.Since(startTime).Seconds()
 			// get 100md from user
 			startTime = time.Now()
 			readLen := 0
@@ -297,7 +290,7 @@ func TestApp(t *testing.T) {
 			}
 			_, _ = userConn.Write([]byte{0})
 			// read bandwidth
-			readBw := float64(dataSize/1024/1024) / time.Now().Sub(startTime).Seconds()
+			readBw := float64(dataSize/1024/1024) / time.Since(startTime).Seconds()
 			// save result
 			err := writeResult([]float64{writeBw, readBw}, appResultFileName)
 			if err != nil {
@@ -340,7 +333,7 @@ func TestUser(t *testing.T) {
 		t.Fatal("the read len is not right", readLen, dataSize)
 	}
 	// read bandwidth
-	readBw := float64(dataSize/1024/1024) / time.Now().Sub(startTime).Seconds()
+	readBw := float64(dataSize/1024/1024) / time.Since(startTime).Seconds()
 	// send 100mb data to app
 	startTime = time.Now()
 	b = bytes.Repeat([]byte{0}, 1024)
@@ -359,7 +352,7 @@ func TestUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	// send bandwidth
-	writeBw := float64(dataSize/1024/1024) / time.Now().Sub(startTime).Seconds()
+	writeBw := float64(dataSize/1024/1024) / time.Since(startTime).Seconds()
 	// save result
 	err = writeResult([]float64{readBw, writeBw}, userResultFileName)
 	if err != nil {
@@ -414,7 +407,7 @@ func TestNewMux2(t *testing.T) {
 				break
 			}
 		}
-		log.Println("now rate", count/time.Now().Sub(start).Seconds()/1024/1024)
+		log.Println("now rate", count/time.Since(start).Seconds()/1024/1024)
 	})
 	log.Println(err)
 }
@@ -536,7 +529,7 @@ func server(ip string) {
 			log.Println(err)
 		}
 	}()
-	return
+	//return
 }
 
 func client(ip string) {
@@ -548,73 +541,6 @@ func client(ip string) {
 	if err != nil {
 		log.Println(err)
 	}
-}
-
-func test_request() {
-	conn, _ := net.Dial("tcp", "127.0.0.1:7777")
-	for i := 0; i < 1000; i++ {
-		_, _ = conn.Write([]byte(`GET / HTTP/1.1
-Host: 127.0.0.1:7777
-Connection: keep-alive
-
-
-`))
-		r, err := http.ReadResponse(bufio.NewReader(conn), nil)
-		if err != nil {
-			log.Println("close by read response err", err)
-			break
-		}
-		log.Println("read response success", r)
-		b, err := httputil.DumpResponse(r, true)
-		if err != nil {
-			log.Println("close by dump response err", err)
-			break
-		}
-		fmt.Println(string(b[:20]), err)
-		//time.Sleep(time.Second)
-	}
-	log.Println("finish")
-}
-
-func test_raw(k int) {
-	for i := 0; i < 1000; i++ {
-		ti := time.Now()
-		conn, err := net.Dial("tcp", "127.0.0.1:7777")
-		if err != nil {
-			log.Println("conn dial err", err)
-		}
-		tid := time.Now()
-		_, _ = conn.Write([]byte(`GET /videojs5/video.js HTTP/1.1
-Host: 127.0.0.1:7777
-
-
-`))
-		tiw := time.Now()
-		buf := make([]byte, 3572)
-		n, err := io.ReadFull(conn, buf)
-		//n, err := conn.Read(buf)
-		if err != nil {
-			log.Println("close by read response err", err)
-			break
-		}
-		log.Println(n, string(buf[:50]), "\n--------------\n", string(buf[n-50:n]))
-		//time.Sleep(time.Second)
-		err = conn.Close()
-		if err != nil {
-			log.Println("close conn err ", err)
-		}
-		now := time.Now()
-		du := now.Sub(ti).Seconds()
-		dud := now.Sub(tid).Seconds()
-		duw := now.Sub(tiw).Seconds()
-		if du > 1 {
-			log.Println("duration long", du, dud, duw, k, i)
-		}
-		if n != 3572 {
-			log.Println("n loss", n, string(buf))
-		}
-	}
-	log.Println("finish")
 }
 
 func TestNewConn(t *testing.T) {

@@ -77,18 +77,18 @@ curl -X POST \
 
 以下接口均使用 `GET` 请求渲染对应隧道类型页面：
 
-| URL             | 类型说明      |
-|-----------------|-----------|
-| `/index/tcp`    | TCP 隧道    |
-| `/index/udp`    | UDP 隧道    |
-| `/index/socks5` | Socks5 隧道 |
-| `/index/http`   | HTTP 代理   |
+| URL             | 类型说明              |
+|-----------------|-------------------|
+| `/index/tcp`    | TCP 隧道            |
+| `/index/udp`    | UDP 隧道            |
+| `/index/socks5` | Socks5 隧道         |
+| `/index/http`   | HTTP 代理           |
 | `/index/mix`    | 混合代理（HTTP+SOCKS5） |
-| `/index/file`   | 文件服务      |
-| `/index/secret` | 私密代理      |
-| `/index/p2p`    | P2P 隧道    |
-| `/index/host`   | 域名解析      |
-| `/index/all`    | 按客户端展示    |
+| `/index/file`   | 文件服务              |
+| `/index/secret` | 私密代理              |
+| `/index/p2p`    | P2P 隧道            |
+| `/index/host`   | 域名解析              |
+| `/index/all`    | 按客户端展示            |
 
 ## 隧道管理接口
 

@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -53,7 +52,7 @@ var QuicConfig = &quic.Config{
 }
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	//rand.Seed(time.Now().UnixNano())
 	crypt.InitTls(tls.Certificate{})
 }
 
@@ -432,7 +431,7 @@ func NewConn(tp string, vkey string, server string, proxyUrl string, localIP str
 
 	//logs.Debug("SetDeadline")
 	_ = connection.SetDeadline(time.Now().Add(timeout))
-	defer connection.SetDeadline(time.Time{})
+	defer func() { _ = connection.SetDeadline(time.Time{}) }()
 
 	c := conn.NewConn(connection)
 	if c == nil {
@@ -731,7 +730,7 @@ func dialKCPWithLocalIP(server, localIP string) (*kcp.UDPSession, error) {
 }
 
 // get a basic auth string
-func getBasicAuth(username, password string) string {
-	auth := username + ":" + password
-	return base64.StdEncoding.EncodeToString([]byte(auth))
-}
+//func getBasicAuth(username, password string) string {
+//	auth := username + ":" + password
+//	return base64.StdEncoding.EncodeToString([]byte(auth))
+//}

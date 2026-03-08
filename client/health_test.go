@@ -40,8 +40,8 @@ func TestNewHealthCheckerInitializesOnlyValidHealthConfigs(t *testing.T) {
 
 func TestDoCheckUnsupportedTypeSendsDownEvent(t *testing.T) {
 	sideA, sideB := net.Pipe()
-	defer sideA.Close()
-	defer sideB.Close()
+	defer func() { _ = sideA.Close() }()
+	defer func() { _ = sideB.Close() }()
 
 	readCh := make(chan string, 1)
 	errCh := make(chan error, 1)
@@ -81,7 +81,7 @@ func TestDoCheckTCPSuccessAfterFailuresSendsRecoveryEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen failed: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -93,8 +93,8 @@ func TestDoCheckTCPSuccessAfterFailuresSendsRecoveryEvent(t *testing.T) {
 	}()
 
 	sideA, sideB := net.Pipe()
-	defer sideA.Close()
-	defer sideB.Close()
+	defer func() { _ = sideA.Close() }()
+	defer func() { _ = sideB.Close() }()
 
 	readCh := make(chan string, 1)
 	errCh := make(chan error, 1)
