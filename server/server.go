@@ -186,12 +186,15 @@ func dealClientFlow() {
 	}
 }
 
+const pingTimeout = 15 * time.Second
+
 func PingClient(id int, addr string) int {
 	if id <= 0 {
 		return 0
 	}
 	link := conn.NewLink("ping", "", false, false, addr, false)
 	link.Option.NeedAck = true
+	link.Option.Timeout = pingTimeout
 	start := time.Now()
 	target, err := Bridge.SendLinkInfo(id, link, nil)
 	if err != nil {

@@ -28,8 +28,8 @@ type Conn struct {
 
 func NewConn(connId int32, mux *Mux) *Conn {
 	c := &Conn{
-		connStatusOkCh:   make(chan struct{}),
-		connStatusFailCh: make(chan struct{}),
+		connStatusOkCh:   make(chan struct{}, 1),
+		connStatusFailCh: make(chan struct{}, 1),
 		connId:           connId,
 		priority:         false,
 		receiveWindow:    new(receiveWindow),
@@ -82,14 +82,22 @@ func (s *Conn) SetClosingFlag() {
 }
 
 func (s *Conn) Close() (err error) {
-	s.once.Do(s.closeProcess)
+	s.once.Do(func() {
+		s.closeProcess(true)
+	})
 	return
 }
 
-func (s *Conn) closeProcess() {
+func (s *Conn) closeLocal() {
+	s.once.Do(func() {
+		s.closeProcess(false)
+	})
+}
+
+func (s *Conn) closeProcess(notifyRemote bool) {
 	atomic.StoreUint32(&s.isClose, 1)
 	s.receiveWindow.mux.connMap.Delete(s.connId)
-	if !s.receiveWindow.mux.IsClosed() {
+	if notifyRemote && !s.receiveWindow.mux.IsClosed() {
 		// if server or user close the conn while reading, will Get an io.EOF
 		// and this Close method will be invoked, send this signal to close other side
 		s.receiveWindow.mux.sendInfo(muxConnClose, s.connId, s.priority, nil)
