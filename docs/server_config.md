@@ -187,21 +187,21 @@ server {
 ---
 
 ## 9. 其他高级配置
-| 名称                           | 说明                                        |
-|------------------------------|-------------------------------------------|
-| `allow_flow_limit`           | 是否允许流量限制                                  |
-| `allow_rate_limit`           | 是否允许带宽限制                                  |
-| `allow_time_limit`           | 是否允许到期时间限制                                |
-| `allow_tunnel_num_limit`     | 是否允许限制客户端最大隧道数                            |
-| `allow_local_proxy`          | 是否允许 NPS 本地代理连接（相当于在nps服务器上启动一个npc）       |
-| `allow_user_local`           | 是否允许用户使用 NPS 本地代理连接                       |
-| `allow_secret_link`          | 是否允许私密代理客户端指定连接地址                         |
-| `allow_secret_local`         | 是否允许私密代理客户端连接到服务器本地                       |
-| `allow_connection_num_limit` | 是否限制客户端最大连接数                              |
-| `allow_multi_ip`             | 是否允许配置隧道监听IP地址                            |
-| `system_info_display`        | 是否显示系统负载监控信息                              |
-| `disconnect_timeout`         | TCP 中断超时等待时间（单位 5s，默认值 60，即 300s = 5mins） |
-| `http_cache`                 | 是否启用 HTTP 缓存（已弃用，不再支持该功能）                 |
+| 名称                           | 说明                                  |
+|------------------------------|-------------------------------------|
+| `allow_flow_limit`           | 是否允许流量限制                            |
+| `allow_rate_limit`           | 是否允许带宽限制                            |
+| `allow_time_limit`           | 是否允许到期时间限制                          |
+| `allow_tunnel_num_limit`     | 是否允许限制客户端最大隧道数                      |
+| `allow_local_proxy`          | 是否允许 NPS 本地代理连接（相当于在nps服务器上启动一个npc） |
+| `allow_user_local`           | 是否允许用户使用 NPS 本地代理连接                 |
+| `allow_secret_link`          | 是否允许私密代理客户端指定连接地址                   |
+| `allow_secret_local`         | 是否允许私密代理客户端连接到服务器本地                 |
+| `allow_connection_num_limit` | 是否限制客户端最大连接数                        |
+| `allow_multi_ip`             | 是否允许配置隧道监听IP地址                      |
+| `system_info_display`        | 是否显示系统负载监控信息                        |
+| `disconnect_timeout`         | TCP 中断超时等待时间（单位 s，默认值 30s）          |
+| `http_cache`                 | 是否启用 HTTP 缓存（已弃用，不再支持该功能）           |
 
 ---
 

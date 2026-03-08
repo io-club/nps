@@ -95,7 +95,7 @@ proxy_url=socks5://111:222@127.0.0.1:8024
 | `-log_max_size`       | 单个日志文件最大大小（MB）                                                        | `5`       |
 | `-log_color`          | 控制台输出启用 ANSI 彩色                                                       | `true`    |
 | `-auto_reconnect`     | 断线后自动重连                                                               | `true`    |
-| `-disconnect_timeout` | 连接超时秒数                                                                | `60`      |
+| `-disconnect_timeout` | 连接超时秒数                                                                | `30`      |
 | `-keepalive`          | 保活（KeepAlive）周期（秒）                                                    | 默认        |
 | `-pprof`              | 启用 PProf 调试（格式 `ip:port`）                                             | 无         |
 | `-local_type`         | P2P 目标类型                                                              | `p2p`     |

@@ -310,7 +310,7 @@ func run() {
 	crypt.InitTls(cert)
 	tool.InitAllowPort()
 	tool.StartSystemInfo()
-	timeout := beego.AppConfig.DefaultInt("disconnect_timeout", 60)
+	timeout := beego.AppConfig.DefaultInt("disconnect_timeout", 30)
 	bridgeType := beego.AppConfig.DefaultString("bridge_type", "both")
 	bridge.ServerKcpEnable = beego.AppConfig.DefaultBool("kcp_enable", true) && connection.BridgeKcpPort != 0 && (bridgeType == "kcp" || bridgeType == "udp" || bridgeType == "both")
 	bridge.ServerQuicEnable = beego.AppConfig.DefaultBool("quic_enable", true) && connection.BridgeQuicPort != 0 && (bridgeType == "quic" || bridgeType == "udp" || bridgeType == "both")
