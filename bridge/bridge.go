@@ -37,11 +37,11 @@ var (
 	ServerSecureMode = false
 )
 
+var bridgeHandshakeReadTimeout time.Duration = 10
+
 type Bridge struct {
-	TunnelPort         int
 	Client             *sync.Map
 	Register           *sync.Map
-	tunnelType         string //bridge type kcp or tcp
 	VirtualTcpListener *conn.VirtualListener
 	VirtualTlsListener *conn.VirtualListener
 	VirtualWsListener  *conn.VirtualListener
@@ -56,10 +56,8 @@ type Bridge struct {
 	disconnectTime     int
 }
 
-func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.Map, disconnectTime int) *Bridge {
+func NewTunnel(ipVerify bool, runList *sync.Map, disconnectTime int) *Bridge {
 	return &Bridge{
-		TunnelPort:     tunnelPort,
-		tunnelType:     tunnelType,
 		Client:         &sync.Map{},
 		Register:       &sync.Map{},
 		OpenHost:       make(chan *file.Host, 100),
@@ -152,10 +150,10 @@ func (s *Bridge) StartTunnel() error {
 	if ServerKcpEnable {
 		logs.Info("Server start, the bridge type is kcp, the bridge port is %d", connection.BridgeKcpPort)
 		go func() {
-			bridgeKcp := *s
-			bridgeKcp.tunnelType = "kcp"
+			//bridgeKcp := *s
+			//bridgeKcp.tunnelType = "kcp"
 			err := conn.NewKcpListenerAndProcess(common.BuildAddress(connection.BridgeKcpIp, strconv.Itoa(connection.BridgeKcpPort)), func(c net.Conn) {
-				bridgeKcp.CliProcess(conn.NewConn(c), "kcp")
+				s.CliProcess(conn.NewConn(c), "kcp")
 			})
 			if err != nil {
 				logs.Error("KCP listener error: %v", err)
@@ -299,6 +297,8 @@ func (s *Bridge) CliProcess(c *conn.Conn, tunnelType string) {
 		return
 	}
 
+	c.SetReadDeadlineBySecond(bridgeHandshakeReadTimeout)
+
 	//read test flag
 	if _, err := c.GetShortContent(3); err != nil {
 		logs.Trace("The client %v connect error: %v", c.Conn.RemoteAddr(), err)
@@ -337,7 +337,6 @@ func (s *Bridge) CliProcess(c *conn.Conn, tunnelType string) {
 			_ = c.Close()
 			return
 		}
-		c.SetReadDeadlineBySecond(5)
 		//get vKey from client
 		keyBuf, err := c.GetShortContent(32)
 		if err != nil {
@@ -504,9 +503,9 @@ func (s *Bridge) CliProcess(c *conn.Conn, tunnelType string) {
 			_ = c.Close()
 			return
 		}
-		c.SetReadDeadlineBySecond(5)
+		//c.SetReadDeadlineBySecond(5)
 	}
-	go s.typeDeal(c, id, ver, clientVer, true)
+	go s.typeDeal(c, id, ver, clientVer, tunnelType, true)
 	//return
 }
 
@@ -531,7 +530,7 @@ func (s *Bridge) DelClient(id int) {
 }
 
 // use different
-func (s *Bridge) typeDeal(c *conn.Conn, id, ver int, vs string, first bool) {
+func (s *Bridge) typeDeal(c *conn.Conn, id, ver int, vs, tunnelType string, first bool) {
 	addr := c.RemoteAddr()
 	flag, err := c.ReadFlag()
 	if err != nil {
@@ -612,7 +611,7 @@ func (s *Bridge) typeDeal(c *conn.Conn, id, ver int, vs string, first bool) {
 		if ok && ver > 4 {
 			anyConn = qc.GetSession()
 		} else {
-			anyConn = mux.NewMux(c.Conn, s.tunnelType, s.disconnectTime, false)
+			anyConn = mux.NewMux(c.Conn, tunnelType, s.disconnectTime, false)
 		}
 		if anyConn == nil {
 			logs.Warn("Failed to create Mux for client %v", addr)
@@ -650,7 +649,7 @@ func (s *Bridge) typeDeal(c *conn.Conn, id, ver int, vs string, first bool) {
 						if ok {
 							mc.SetPriority()
 						}
-						go s.typeDeal(conn.NewConn(c), id, ver, vs, false)
+						go s.typeDeal(conn.NewConn(c), id, ver, vs, tunnelType, false)
 					})
 					return
 				case *quic.Conn:
@@ -661,7 +660,7 @@ func (s *Bridge) typeDeal(c *conn.Conn, id, ver int, vs string, first bool) {
 							return
 						}
 						sc := conn.NewQuicStreamConn(stream, t)
-						go s.typeDeal(conn.NewConn(sc), id, ver, vs, false)
+						go s.typeDeal(conn.NewConn(sc), id, ver, vs, tunnelType, false)
 					}
 				default:
 					logs.Error("Unknown tunnel type")
@@ -693,7 +692,7 @@ func (s *Bridge) typeDeal(c *conn.Conn, id, ver int, vs string, first bool) {
 		if ok && ver > 4 {
 			anyConn = qc.GetSession()
 		} else {
-			anyConn = mux.NewMux(c.Conn, s.tunnelType, s.disconnectTime, false)
+			anyConn = mux.NewMux(c.Conn, tunnelType, s.disconnectTime, false)
 		}
 		if anyConn == nil {
 			logs.Warn("Failed to create Mux for client %v", addr)
@@ -713,7 +712,7 @@ func (s *Bridge) typeDeal(c *conn.Conn, id, ver int, vs string, first bool) {
 					idle.Inc()
 					go s.typeDeal(conn.NewConn(nc).OnClose(func(*conn.Conn) {
 						idle.Dec()
-					}), id, ver, vs, false)
+					}), id, ver, vs, tunnelType, false)
 				})
 				return
 			case *quic.Conn:
@@ -727,7 +726,7 @@ func (s *Bridge) typeDeal(c *conn.Conn, id, ver int, vs string, first bool) {
 					idle.Inc()
 					go s.typeDeal(conn.NewConn(sc).OnClose(func(c *conn.Conn) {
 						idle.Dec()
-					}), id, ver, vs, false)
+					}), id, ver, vs, tunnelType, false)
 				}
 			default:
 				logs.Error("Unknown tunnel type")

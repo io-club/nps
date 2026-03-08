@@ -183,11 +183,11 @@ func HandleUdp5(ctx context.Context, serverConn net.Conn, timeout time.Duration,
 // SetUdpSession udp connection setting
 func SetUdpSession(sess *kcp.UDPSession) {
 	//sess.SetStreamMode(true)
-	sess.SetWindowSize(1024, 1024)
+	sess.SetWindowSize(256, 256)
 	_ = sess.SetReadBuffer(64 * 1024)
 	_ = sess.SetWriteBuffer(64 * 1024)
-	sess.SetNoDelay(1, 10, 2, 1)
-	sess.SetMtu(1600)
+	sess.SetNoDelay(1, 20, 2, 1)
+	sess.SetMtu(1350)
 	sess.SetACKNoDelay(true)
 	sess.SetWriteDelay(false)
 }

@@ -311,7 +311,6 @@ func run() {
 	tool.InitAllowPort()
 	tool.StartSystemInfo()
 	timeout := beego.AppConfig.DefaultInt("disconnect_timeout", 60)
-	bridgePort := connection.BridgePort
 	bridgeType := beego.AppConfig.DefaultString("bridge_type", "both")
 	bridge.ServerKcpEnable = beego.AppConfig.DefaultBool("kcp_enable", true) && connection.BridgeKcpPort != 0 && (bridgeType == "kcp" || bridgeType == "udp" || bridgeType == "both")
 	bridge.ServerQuicEnable = beego.AppConfig.DefaultBool("quic_enable", true) && connection.BridgeQuicPort != 0 && (bridgeType == "quic" || bridgeType == "udp" || bridgeType == "both")
@@ -322,5 +321,5 @@ func run() {
 	bridge.ServerTlsEnable = beego.AppConfig.DefaultBool("tls_enable", true) && connection.BridgeTlsPort != 0 && bridgeType == "tcp"
 	bridge.ServerWsEnable = beego.AppConfig.DefaultBool("ws_enable", true) && connection.BridgeWsPort != 0 && connection.BridgePath != "" && bridgeType == "tcp"
 	bridge.ServerWssEnable = beego.AppConfig.DefaultBool("wss_enable", true) && connection.BridgeWssPort != 0 && connection.BridgePath != "" && bridgeType == "tcp"
-	go server.StartNewServer(bridgePort, task, bridgeType, timeout)
+	go server.StartNewServer(task, timeout)
 }

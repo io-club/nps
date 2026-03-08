@@ -279,7 +279,7 @@ func GetBestBridge(ip string) (bridgeType, bridgeAddr, bridgeIp, bridgePort stri
 		bridgeIp = "[" + bridgeIp + "]"
 	}
 	bridgeType = beego.AppConfig.String("bridge_type")
-	bridgePort = strconv.Itoa(server.Bridge.TunnelPort)
+	bridgePort = strconv.Itoa(connection.BridgePort)
 	bridgeAddr = bridgeIp + ":" + bridgePort
 	if bridgeType == "both" {
 		bridgeType = "tcp"
