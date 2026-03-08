@@ -38,7 +38,7 @@ func DialKCPWithLocalIP(raddr string, localIP string) (*kcp.UDPSession, error) {
 		return nil, err
 	}
 
-	sess, err := NewKCPSessionWithConn(conn, udpaddr)
+	sess, err := NewKCPSessionWithConn(udpaddr, conn)
 	if err != nil {
 		_ = conn.Close()
 		return nil, err
@@ -48,7 +48,7 @@ func DialKCPWithLocalIP(raddr string, localIP string) (*kcp.UDPSession, error) {
 }
 
 // NewKCPSessionWithConn creates a KCP session based on an existing PacketConn.
-func NewKCPSessionWithConn(pc net.PacketConn, raddr *net.UDPAddr) (*kcp.UDPSession, error) {
+func NewKCPSessionWithConn(raddr *net.UDPAddr, pc net.PacketConn) (*kcp.UDPSession, error) {
 	var convid uint32
 
 	if err := binary.Read(rand.Reader, binary.LittleEndian, &convid); err != nil {

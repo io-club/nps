@@ -715,7 +715,7 @@ func (mgr *P2PManager) newUdpConn(localAddr string, cfg *config.CommonConfig, l 
 			return
 		}
 	} else {
-		kcpTunnel, err := conn.NewKCPSessionWithConn(localConn, rUDPAddr)
+		kcpTunnel, err := conn.NewKCPSessionWithConn(rUDPAddr, localConn)
 		if err != nil {
 			logs.Warn("KCP create failed: %v", err)
 			_ = localConn.Close()
