@@ -16,7 +16,7 @@ require (
 	github.com/kardianos/service v1.2.4
 	github.com/miekg/dns v1.1.72
 	github.com/panjf2000/ants/v2 v2.11.5
-	github.com/quic-go/quic-go v0.59.0
+	github.com/quic-go/quic-go v0.59.1
 	github.com/rs/zerolog v1.34.0
 	github.com/shirou/gopsutil/v4 v4.26.2
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
